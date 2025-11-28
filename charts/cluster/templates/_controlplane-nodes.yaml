@@ -1,0 +1,801 @@
+{{- define "cluster.controlplane-nodes" -}}
+{{- $networking := (include "networking" .) | fromYaml }}
+{{- $machines := (include "machines" .) | fromYaml }}
+{{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
+---
+{{- /*
+https://syself.com/docs/caph/reference/hcloud-machine-template
+*/}}
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: HCloudMachineTemplate
+metadata:
+  name: {{ include "cp-hcloud-machine-template-name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cluster.labels" . | nindent 4 }}
+    {{- include "cp-hcloud-machine-template-labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  template:
+    spec: {{- include "cp-hcloud-machine-template-spec" . | nindent 6 }}
+{{- end }}
+{{- if eq .Values.capi.providers.controlPlane.name "talos" }}
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+kind: TalosControlPlane
+metadata:
+  name: {{ include "cp-name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cluster.labels" . | nindent 4 }}
+  # annotations:
+  #   argocd.argoproj.io/sync-wave: ""
+spec:
+  controlPlaneConfig:
+    controlplane:
+      strategicPatches:
+      # https://www.talos.dev/v1.8/talos-guides/install/cloud-platforms/hetzner/#install-hetzners-cloud-controller-manager
+      # https://github.com/hetznercloud/hcloud-cloud-controller-manager
+      - |
+        cluster:
+          externalCloudProvider:
+            enabled: true
+      # https://www.talos.dev/v1.8/kubernetes-guides/network/deploying-cilium/#machine-config-preparation
+      - |
+        cluster:
+          network:
+            cni:
+              name: none
+          proxy:
+            disabled: true
+      # https://www.talos.dev/v1.8/talos-guides/network/kubespan/#creating-a-new-cluster
+      # https://www.talos.dev/v1.8/talos-guides/network/kubespan/#configuration
+      # Hcloud has a MTU of 1450 (KubeSpanMTU = UnderlyingMTU - 80)
+      # - |
+      #   machine:
+      #     network:
+      #       kubespan:
+      #         enabled: true
+      #         advertiseKubernetesNetworks: false
+      #         allowDownPeerBypass: false
+      #         mtu: 1370
+      # - |
+      #   cluster:
+      #       discovery:
+      #           enabled: true
+      #           # Configure registries used for cluster member discovery.
+      #           registries:
+      #               kubernetes: # Kubernetes registry is problematic with KubeSpan, if the control plane endpoint is routeable itself via KubeSpan.
+      #                 disabled: true
+      #               service: {}
+      # https://github.com/siderolabs/talos-cloud-controller-manager/blob/main/docs/install.md#prepare-nodes
+      - |
+        machine:
+          kubelet:
+            extraArgs:
+              cloud-provider: external
+              # For security reasons, it is recommended to enable the rotation of server certificates.
+              rotate-server-certificates: true
+          features:
+            kubernetesTalosAPIAccess:
+              enabled: true
+              allowedRoles:
+                - os:reader
+              allowedKubernetesNamespaces:
+                - kube-system
+      - |
+        machine:
+          install:
+            image: ghcr.io/siderolabs/installer:{{ $machines.cp.osVersion }}
+            extraKernelArgs:
+              - "ipv6.disable=1"
+          {{- with .Values.hCloud.lb.existing.ip }}
+          certSANs:
+          - {{ . | quote }}
+          {{- end }}
+          network:
+            # extraHostEntries:
+            interfaces:
+            - interface: eth0
+              dhcp: true
+              # dhcpOptions:
+              #   routeMetric: 1024
+              # routes:
+              # - network: 0.0.0.0/0 # The route's network (destination).
+              #   gateway: 10.0.0.1 # The gateway IP address. First IP in the subnet.
+          # sysctls:
+          #   net.core.somaxconn: "65535"
+          #   net.core.netdev_max_backlog: "4096"
+          features:
+            hostDNS:
+          #     enabled: true
+          #     forwardKubeDNSToHost: true
+              resolveMemberNames: true
+          # time:
+          #   servers:
+          #   - "ntp1.hetzner.de"
+          #   - "ntp2.hetzner.com"
+          #   - "ntp3.hetzner.net"
+          #   - "time.cloudflare.com"
+          # RegistriesConfig represents the image pull options.
+          # registries:
+          {{- if $networking.hcloudNetworkEnabled }}
+          kubelet:
+            nodeIP:
+              validSubnets:
+              - "{{ $networking.subnetIpv4Cidr }}"
+          {{- end }}
+        cluster:
+          network:
+            dnsDomain: cluster.local
+            podSubnets:
+              - "{{ $networking.podsIpv4Cidr }}"
+            serviceSubnets:
+              - "{{ $networking.servicesIpv4Cidr }}"
+          # apiServer:
+          #   # NOTE: LB IP is added automatically here.
+          #   certSANs:
+          #   extraArgs:
+          controllerManager:
+            extraArgs:
+              cloud-provider: external
+              {{- if $networking.hcloudNetworkEnabled }}
+              node-cidr-mask-size-ipv4: {{ $networking.subnetIpv4Cidr | splitList "/" | last }}
+              {{- end }}
+              bind-address: "0.0.0.0"
+              # https://github.com/siderolabs/talos-cloud-controller-manager/blob/main/docs/install.md#example
+              # Disable node IPAM controller
+              # controllers: "*,tokencleaner,-node-ipam-controller"
+          coreDNS:
+              disabled: false
+          etcd:
+            image: gcr.io/etcd-development/etcd:{{ .Values.talos.etcd.version }}
+            {{- if $networking.hcloudNetworkEnabled }}
+            advertisedSubnets:
+              - "{{ $networking.subnetIpv4Cidr }}"
+            {{- end }}
+            extraArgs:
+              listen-metrics-urls: http://0.0.0.0:2381
+              election-timeout: "{{ .Values.talos.etcd.electionTimeout }}"
+          scheduler:
+            extraArgs:
+              bind-address: "0.0.0.0"
+      {{- with .Values.talos.machine.registries.mirrors }}
+      - |
+        machine:
+          registries:
+            mirrors:
+              {{- . | toYaml | nindent 14 }}
+      {{- end }}
+      generateType: controlplane
+      # When we set this, there were errors with certificate signing requests for node (it was using wrong DNS names).
+      # hostname:
+      #   source: "MachineName"
+      talosVersion: {{ $machines.cp.osVersion }}
+  infrastructureTemplate:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: HCloudMachineTemplate
+    name: {{ include "cp-hcloud-machine-template-name" . }}
+    namespace: {{ .Release.Namespace }}
+  replicas: {{ $machines.cp.replicas }}
+  {{- /*
+  rolloutStrategy:
+    # Supported strategies: "RollingUpdate" and "OnDelete"
+    type: "RollingUpdate"
+    rollingUpdate:
+  */}}
+  version: {{ $machines.cp.k8sVersion }}
+{{- else if eq .Values.capi.providers.controlPlane.name "kubeadm" }}
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: KubeadmControlPlane
+metadata:
+  name: {{ include "cp-name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cluster.labels" . | nindent 4 }}
+spec:
+  {{- /*
+  # https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap/#kubeadmconfig-objects
+  # https://kubernetes.io/docs/reference/config-api/kubeadm-config.v1beta3/
+  # k explain KubeadmControlPlane.spec
+  # NOTE: KubeadmControlPlane.spec.kubeadmConfigSpec = KubeadmConfigTemplate.spec.template.spec
+  */}}
+  kubeadmConfigSpec:
+    {{- /*
+    https://kubernetes.io/docs/reference/config-api/kubeadm-config.v1beta3/#kubeadm-k8s-io-v1beta3-ClusterConfiguration
+    */}}
+    clusterConfiguration:
+      {{- /*
+      # Defaults to /etc/kubernetes/pki
+      # certificatesDir:
+      # Defaults to Cluster.metadata.name
+      # clusterName:
+      # DNS defines the options for the DNS add-on installed in the cluster.
+      # dns:
+      # FeatureGates to enable
+      # featureGates:
+      # Defaults to the Cluster object spec.clusterNetwork
+      # networking:
+      # Defaults to the Machine object spec.version
+      # kubernetesVersion:
+      */}}
+      apiServer:
+        {{- /*
+        https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/
+        */}}
+        extraArgs:
+          {{- /*
+          https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/
+          */}}
+          {{- if or .Values.admissionPlugins.eventRateLimit.enabled .Values.admissionPlugins.podSecurity.enabled }}
+          admission-control-config-file: /etc/kubernetes/admission-controls/admission-controls.yaml
+          {{- end }}
+          {{- with .Values.admissionPlugins.enable }}
+          enable-admission-plugins: {{ join "," . }}
+          {{- end }}
+          {{- if .Values.kubeadm.kubeApiServer.disableAnonymousAuth }}
+          anonymous-auth: "false"
+          {{- end }}
+          {{- if .Values.kubeadm.kubeApiServer.enableAuditLogs }}
+          audit-log-format: json
+          audit-log-path: "/var/log/kube-apiserver-audit-logs/log.json"
+          audit-policy-file: "/etc/kubernetes/audit-policy.yaml"
+          audit-log-maxage: "30"
+          audit-log-maxbackup: "10"
+          audit-log-maxsize: "100"
+          {{- end }}
+          authorization-mode: Node,RBAC
+          client-ca-file: /etc/kubernetes/pki/ca.crt
+          cloud-provider: external
+          default-not-ready-toleration-seconds: {{ .Values.kubeadm.kubeApiServer.defaultNotReadyTolerationSeconds | quote }}
+          default-unreachable-toleration-seconds: {{ .Values.kubeadm.kubeApiServer.defaultUnreachableTolerationSeconds | quote }}
+          enable-aggregator-routing: "true"
+          {{- /*
+          # TODO not sure about this.
+          {{- if .Values.kubeadm.kubeApiServer.disablePublicAccessClusterInfoConfigMap }}
+          enable-bootstrap-token-auth: "false"
+          {{- else }}
+          enable-bootstrap-token-auth: "true"
+          {{- end }}
+          */}}
+          enable-bootstrap-token-auth: "true"
+          {{- if .Values.kubeadm.etcd.encryption.enabled }}
+          encryption-provider-config: /etc/kubernetes/encryption-provider.yaml
+          {{- end }}
+          etcd-cafile: /etc/kubernetes/pki/etcd/ca.crt
+          etcd-certfile: /etc/kubernetes/pki/etcd/server.crt
+          etcd-keyfile: /etc/kubernetes/pki/etcd/server.key
+          # feature-gates: AppArmor=true
+          kubelet-client-certificate: /etc/kubernetes/pki/apiserver-kubelet-client.crt
+          kubelet-client-key: /etc/kubernetes/pki/apiserver-kubelet-client.key
+          kubelet-preferred-address-types: ExternalIP,Hostname,InternalDNS,ExternalDNS
+          {{- if .Values.kubeadm.kubeApiServer.oidc.enabled }}
+          oidc-issuer-url: {{ .Values.kubeadm.kubeApiServer.oidc.issuerUrl | required ".Values.kubeadm.kubeApiServer.oidc.issuerUrl is required when oidc is enabled" }}
+          oidc-client-id: {{ tpl .Values.kubeadm.kubeApiServer.oidc.clientId . | quote }}
+          {{- with .Values.kubeadm.kubeApiServer.oidc.caFile }}
+          {{- /*
+          If this is not set here, this must be set during postKubeadmCommands.
+          Without this setting, oidc login won't work.
+          */}}
+          oidc-ca-file: {{ . }}
+          {{- end }}
+          oidc-username-prefix: {{ .Values.kubeadm.kubeApiServer.oidc.usernamePrefix }}
+          oidc-username-claim: {{ .Values.kubeadm.kubeApiServer.oidc.usernameClaim }}
+          oidc-groups-prefix: {{ .Values.kubeadm.kubeApiServer.oidc.groupsPrefix }}
+          oidc-groups-claim: {{ .Values.kubeadm.kubeApiServer.oidc.groupsClaim }}
+          {{- end }}
+          profiling: "false"
+          proxy-client-cert-file: /etc/kubernetes/pki/front-proxy-client.crt
+          proxy-client-key-file: /etc/kubernetes/pki/front-proxy-client.key
+          requestheader-allowed-names: front-proxy-client
+          requestheader-client-ca-file: /etc/kubernetes/pki/front-proxy-ca.crt
+          requestheader-extra-headers-prefix: X-Remote-Extra-
+          requestheader-group-headers: X-Remote-Group
+          requestheader-username-headers: X-Remote-User
+          request-timeout: "120s"
+          service-account-key-file: /etc/kubernetes/pki/sa.pub
+          service-account-lookup: "true"
+          tls-cert-file: /etc/kubernetes/pki/apiserver.crt
+          tls-min-version: VersionTLS12
+          tls-cipher-suites: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+          tls-private-key-file: /etc/kubernetes/pki/apiserver.key
+        extraVolumes:
+        {{- if .Values.kubeadm.etcd.encryption.enabled }}
+        - hostPath: /etc/kubernetes/encryption-provider.yaml
+          mountPath: /etc/kubernetes/encryption-provider.yaml
+          name: encryption-provider
+          readOnly: true
+        {{- end }}
+        {{- if .Values.kubeadm.kubeApiServer.enableAuditLogs }}
+        - hostPath: /etc/kubernetes/audit-policy.yaml
+          mountPath: /etc/kubernetes/audit-policy.yaml
+          name: audit-policy
+          readOnly: true
+          # type: FileOrCreate
+        - hostPath: /var/log/kube-apiserver-audit-logs
+          mountPath: /var/log/kube-apiserver-audit-logs
+          name: audit-logs
+          # readOnly: false
+          # type: DirectoryOrCreate
+        {{- end }}
+        {{- if or .Values.admissionPlugins.eventRateLimit.enabled .Values.admissionPlugins.podSecurity.enabled }}
+        - hostPath: /etc/kubernetes/admission-controls
+          mountPath: /etc/kubernetes/admission-controls
+          name: admission-controls
+          readOnly: true
+          # type: DirectoryOrCreate
+        {{- end }}
+      controllerManager:
+        {{- /*
+        https://kubernetes.io/docs/reference/command-line-tools-reference/kube-controller-manager/
+        */}}
+        extraArgs:
+          allocate-node-cidrs: "true"
+          authentication-kubeconfig: /etc/kubernetes/controller-manager.conf
+          authorization-kubeconfig: /etc/kubernetes/controller-manager.conf
+          # Set it to 0.0.0.0, so livenessProbe/startupProbe.httpGet.host is not set, which is fine when bind-adress is set to node IP.
+          # If we set it to 127.0.0.1, then livenessProbe/startupProbe.httpGet.host is set to 127.0.0.1 too and so we have to replace it too.
+          # This is configured to node IP in postKubeadmCommands.
+          bind-address: 0.0.0.0
+          cloud-provider: external
+          cluster-signing-cert-file: /etc/kubernetes/pki/ca.crt
+          cluster-signing-duration: 2160h0m0s  # 90 days. Default is 8760h0m0s (1 year).
+          cluster-signing-key-file: /etc/kubernetes/pki/ca.key
+          # feature-gates: RotateKubeletServerCertificate=true,AppArmor=true
+          kubeconfig: /etc/kubernetes/controller-manager.conf
+          profiling: "false"
+          requestheader-client-ca-file: /etc/kubernetes/pki/front-proxy-ca.crt
+          root-ca-file: /etc/kubernetes/pki/ca.crt
+          secure-port: "10257"
+          service-account-private-key-file: /etc/kubernetes/pki/sa.key
+          terminated-pod-gc-threshold: "50"
+          use-service-account-credentials: "true"
+      etcd:
+        local:
+          dataDir: /var/lib/etcd
+          {{- /*
+          https://etcd.io/docs/v3.5/op-guide/configuration/
+          */}}
+          # extraEnvs:
+          # - name: NODE_IP
+          #   valueFrom:
+          #     fieldRef:
+          #       fieldPath: status.hostIP
+          extraArgs:
+            auto-tls: "false"
+            cert-file: /etc/kubernetes/pki/etcd/server.crt
+            tls-min-version: TLS1.2
+            cipher-suites: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+            client-cert-auth: "true"
+            key-file: /etc/kubernetes/pki/etcd/server.key
+            # This is configured in postKubeadmCommands to https://<node-ip>:2381
+            # listen-metrics-urls: https://0.0.0.0:2381
+            # listen-metrics-urls: http://127.0.0.1:2381,https://$(NODE_IP):2381
+            peer-auto-tls: "false"
+            peer-client-cert-auth: "true"
+            trusted-ca-file: /etc/kubernetes/pki/etcd/ca.crt
+      scheduler:
+        {{- /*
+        https://kubernetes.io/docs/reference/command-line-tools-reference/kube-scheduler/
+        */}}
+        extraArgs:
+          # Set it to 0.0.0.0, so livenessProbe/startupProbe.httpGet.host is not set, which is fine when bind-adress is set to node IP.
+          # If we set it to 127.0.0.1, then livenessProbe/startupProbe.httpGet.host is set to 127.0.0.1 too and so we have to replace it too.
+          # This is configured to node IP in postKubeadmCommands.
+          bind-address: 0.0.0.0
+          # feature-gates: AppArmor=true
+          kubeconfig: /etc/kubernetes/scheduler.conf
+          profiling: "false"
+          secure-port: "10259"
+      # networking:
+      #   TODO change this to <cluster-name>.k8s or <cluster-name>.cluster.local
+      #   dnsDomain: "cluster.local"
+    {{- /*
+    List of commands to be executed before/after kubeadm init/join
+    */}}
+    preKubeadmCommands:
+    - bash /etc/kubernetes/preKubeadmCommands.sh 2>&1 | tee -a /var/log/preKubeadmCommands.log
+    postKubeadmCommands:
+    - bash /etc/kubernetes/postKubeadmCommands.sh 2>&1 | tee -a /var/log/postKubeadmCommands.log
+    {{- /*
+    # Extra files to be passed to user_data upon creation
+    */}}
+    files:
+    - path: /etc/kubernetes/preKubeadmCommands.sh
+      owner: root:root
+      permissions: "0700"
+      content: |-
+        #!/usr/bin/env bash
+        set -eu
+        {{- if .Values.etcKubernetes.gitRepoUrl }}
+        echo "Cloning custom /etc/kubernetes files..."
+        git clone --depth 1 --single-branch --branch main \
+          {{ .Values.etcKubernetes.gitRepoUrl | quote }} /tmp/etc-kubernetes
+        rm -f /tmp/etc-kubernetes/README.md /tmp/etc-kubernetes/LICENSE
+        rsync -a /tmp/etc-kubernetes/ /etc/kubernetes/
+        rm -rf /tmp/etc-kubernetes
+        {{- end }}
+      {{- /*
+        # {{- if .Values.kubeadm.kubeApiServer.disablePublicAccessClusterInfoConfigMap }}
+        # if [ -f /etc/kubernetes/discovery-kubeconfig.yaml ]; then
+        #   # cat /run/kubeadm/kubeadm-join-config.yaml
+        #   yq eval '.users = null' -i /etc/kubernetes/discovery-kubeconfig.yaml
+        #   yq eval '.clusters.0.name = ""' -i /etc/kubernetes/discovery-kubeconfig.yaml
+        #   yq eval '.contexts = null' -i /etc/kubernetes/discovery-kubeconfig.yaml
+        #   yq eval '.current-context = ""' -i /etc/kubernetes/discovery-kubeconfig.yaml
+        # fi
+        # {{- end }}
+      */}}
+        echo "Done!"
+    - path: /etc/kubernetes/postKubeadmCommands.sh
+      owner: root:root
+      permissions: "0700"
+      # yamllint disable rule:line-length
+      content: |-
+        #!/usr/bin/env bash
+        set -eu
+
+        while [ ! -f /etc/kubernetes/manifests/etcd.yaml ]; do sleep 10; done
+        echo "Configuring etcd metrics URLs..."
+        NODEIP=$(curl -s https://api.ipify.org | tr -d '\n')
+        sed -i "s|--listen-metrics-urls=http://127.0.0.1:2381|--listen-metrics-urls=https://$NODEIP:2381,http://127.0.0.1:2381|" /etc/kubernetes/manifests/etcd.yaml
+        cat /etc/kubernetes/manifests/etcd.yaml | grep -i "listen-metrics-urls"
+        while [ ! -f /etc/kubernetes/manifests/kube-scheduler.yaml ]; do sleep 10; done
+        echo "Configuring kube-scheduler bind address..."
+        sed -i "s|--bind-address=0.0.0.0|--bind-address=$NODEIP|" /etc/kubernetes/manifests/kube-scheduler.yaml
+        cat /etc/kubernetes/manifests/kube-scheduler.yaml | grep -i "bind-address"
+        while [ ! -f /etc/kubernetes/manifests/kube-controller-manager.yaml ]; do sleep 10; done
+        echo "Configuring kube-controller-manager bind address..."
+        sed -i "s|--bind-address=0.0.0.0|--bind-address=$NODEIP|" /etc/kubernetes/manifests/kube-controller-manager.yaml
+        cat /etc/kubernetes/manifests/kube-controller-manager.yaml | grep -i "bind-address"
+
+        echo "Waiting for Kubernetes API server to become available..."
+        export KUBECONFIG=/etc/kubernetes/admin.conf
+        while ! kubectl get nodes &>/dev/null; do sleep 5; done
+        echo "API server is ready!"
+
+        {{- if .Values.kubeadm.kubeApiServer.disableAnonymousAuth }}
+        echo "Creating a healthcheck token..."
+        kubectl apply -f /etc/kubernetes/kube-apiserver-healthcheck-token.yaml
+        TOKEN=$(kubectl get secret kube-apiserver-healthcheck-token -n kube-system -o jsonpath="{.data.token}" | base64 --decode)
+        echo "Patching kube-apiserver.yaml to add httpHeaders into probes..."
+        yq e '
+          .spec.containers[0] |= (
+            (.livenessProbe, .readinessProbe, .startupProbe) |= (
+              select(.httpGet) |
+              .httpGet.httpHeaders = [
+                {
+                  "name": "Authorization",
+                  "value": "Bearer '"$TOKEN"'"
+                }
+              ]
+            )
+          )
+        ' -i /etc/kubernetes/manifests/kube-apiserver.yaml
+        {{- /*
+        # TODO not sure about this.
+        {{- else if .Values.kubeadm.kubeApiServer.disablePublicAccessClusterInfoConfigMap }}
+        kubectl -n kube-public delete rolebinding kubeadm:bootstrap-signer-clusterinfo --ignore-not-found
+        */}}
+        {{- end }}
+
+        {{- if .Values.kubeadm.setKubeletNodeIp }}
+        echo "Setting --node-ip for kubelet..."
+        sed -i "/--node-ip/d" /var/lib/kubelet/kubeadm-flags.env
+        echo "KUBELET_KUBEADM_ARGS=\"--node-ip=$NODEIP $(cat /var/lib/kubelet/kubeadm-flags.env | sed 's/KUBELET_KUBEADM_ARGS=\"//')" > /var/lib/kubelet/kubeadm-flags.env
+        systemctl restart kubelet
+        {{- end }}
+
+        {{- if and .Values.install.enabled (index .Values.install.resources "10-cilium").enabled (index .Values.install.resources "20-hccm").enabled }}
+        echo "Waiting for Cilium pods to become ready..."
+        while ! kubectl wait -n kube-system pods --all --for=condition=Ready --timeout=60s -l 'app.kubernetes.io/name in (cilium-agent, cilium-envoy, cilium-operator)'; do sleep 10; done
+        echo "Restarting hcloud-cloud-controller-manager..."
+        kubectl rollout restart -n kube-system deployment hcloud-cloud-controller-manager || true
+        {{- end }}
+        echo "Waiting for hcloud-cloud-controller-manager pods to become ready..."
+        while ! kubectl wait -n kube-system pods --all --for=condition=Ready --timeout=60s -l 'app.kubernetes.io/name=hcloud-cloud-controller-manager'; do sleep 10; done
+
+        {{- if not .Values.kubeadm.disableKubeProxy }}
+        echo "Waiting for kube-proxy pods to become ready..."
+        while ! kubectl wait -n kube-system pods --all --for=condition=Ready --timeout=60s -l 'k8s-app=kube-proxy'; do sleep 10; done
+        echo "Configuring kube-proxy metrics URLs..."
+        kubectl -n kube-system get configmap kube-proxy -o yaml | sed 's/metricsBindAddress: ""/metricsBindAddress: "0.0.0.0:10249"/' | kubectl apply -f -
+        kubectl -n kube-system rollout restart daemonset kube-proxy
+        {{- end }}
+
+        {{- with .Values.kubeadm.postKubeadm.extraCommandsCp }}
+        {{- tpl . $ | nindent 8 }}
+        {{- end }}
+        echo "Done!"
+      # yamllint enable rule:line-length
+    {{- if .Values.kubeadm.kubeApiServer.disableAnonymousAuth }}
+    - path: /etc/kubernetes/kube-apiserver-healthcheck-token.yaml
+      owner: root:root
+      permissions: "0600"
+      content: |
+        ---
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: kube-apiserver-healthcheck
+          namespace: kube-system
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRole
+        metadata:
+          name: kube-apiserver-healthcheck
+        rules:
+        - nonResourceURLs: ["/healthz", "/livez", "/readyz"]
+          verbs: ["get"]
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: kube-apiserver-healthcheck
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: ClusterRole
+          name: kube-apiserver-healthcheck
+        subjects:
+        - kind: ServiceAccount
+          name: kube-apiserver-healthcheck
+          namespace: kube-system
+        ---
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: kube-apiserver-healthcheck-token
+          namespace: kube-system
+          annotations:
+            kubernetes.io/service-account.name: kube-apiserver-healthcheck
+        type: kubernetes.io/service-account-token
+    {{- end }}
+    {{- if .Values.kubeadm.etcd.encryption.enabled }}
+    - path: /etc/kubernetes/encryption-provider.yaml
+      owner: root:root
+      permissions: "0600"
+      contentFrom:
+        secret:
+          name: {{ .Values.kubeadm.etcd.encryption.secretName }}
+          key: {{ .Values.kubeadm.etcd.encryption.secretKey }}
+    {{- end }}
+    {{- if and .Values.kubeadm.kubeApiServer.oidc.enabled .Values.kubeadm.kubeApiServer.oidc.useExistingSecretForCa }}
+    {{- /*
+    # This folder is already mounted in /etc/kubernetes/manifests/kube-apiserver.yaml
+    */}}
+    - path: {{ .Values.kubeadm.kubeApiServer.oidc.caFile }}
+      owner: root:root
+      permissions: "0600"
+      contentFrom:
+        secret:
+          name: acme-ca
+          key: ca.crt
+    {{- end }}
+    {{- if or .Values.admissionPlugins.eventRateLimit.enabled .Values.admissionPlugins.podSecurity.enabled }}
+    - path: /etc/kubernetes/admission-controls/admission-controls.yaml
+      owner: root:root
+      permissions: "0600"
+      content: |-
+        # https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#imagereview-config-file-format
+        apiVersion: apiserver.config.k8s.io/v1
+        kind: AdmissionConfiguration
+        plugins:
+        {{- if .Values.admissionPlugins.eventRateLimit.enabled }}
+        - name: EventRateLimit
+          path: /etc/kubernetes/admission-controls/EventRateLimit.yaml
+        {{- end }}
+        {{- /*
+        # - name: PodNodeSelector
+        #   path: /etc/kubernetes/admission-controls/PodNodeSelector.yaml
+        # - name: ResourceQuota
+        #   path: /etc/kubernetes/admission-controls/ResourceQuota.yaml
+        */}}
+        {{- if .Values.admissionPlugins.podSecurity.enabled }}
+        - name: PodSecurity
+          path: /etc/kubernetes/admission-controls/PodSecurity.yaml
+        {{- end }}
+    {{- end }}
+    {{- if .Values.admissionPlugins.eventRateLimit.enabled }}
+    - path: /etc/kubernetes/admission-controls/EventRateLimit.yaml
+      owner: root:root
+      permissions: "0600"
+      content: |-
+        # https://kubernetes.io/docs/reference/config-api/apiserver-eventratelimit.v1alpha1/
+        apiVersion: eventratelimit.admission.k8s.io/v1alpha1
+        kind: Configuration
+        limits:
+        - type: Namespace
+          qps: 50
+          burst: 100
+          cacheSize: 2000
+        - type: User
+          qps: 50
+          burst: 100
+    {{- end }}
+    {{- /*
+    # - path: /etc/kubernetes/admission-controls/PodNodeSelector.yaml
+    #   owner: root:root
+    #   permissions: "0600"
+    #   content: |-
+    #     # https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#podnodeselector
+    #     podNodeSelectorPluginConfig:
+    #       clusterDefaultNodeSelector:
+    # - path: /etc/kubernetes/admission-controls/ResourceQuota.yaml
+    #   owner: root:root
+    #   permissions: "0600"
+    #   content: |-
+    #     # https://kubernetes.io/docs/reference/kubernetes-api/policy-resources/resource-quota-v1/
+    #     # https://kubernetes.io/docs/concepts/policy/resource-quotas/
+    #     apiVersion: apiserver.config.k8s.io/v1
+    #     kind: ResourceQuotaConfiguration
+    #     limitedResources:
+    */}}
+    {{- if .Values.admissionPlugins.podSecurity.enabled }}
+    - path: /etc/kubernetes/admission-controls/PodSecurity.yaml
+      owner: root:root
+      permissions: "0600"
+      content: |-
+        {{- /*
+        # https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#podsecurity
+        # https://kubernetes.io/docs/concepts/security/pod-security-admission/
+        # https://kubernetes.io/docs/concepts/security/pod-security-standards/
+        # https://v1-31.docs.kubernetes.io/docs/tasks/configure-pod-container/enforce-standards-admission-controller/#configure-the-admission-controller
+        # https://v1-31.docs.kubernetes.io/docs/tasks/configure-pod-container/enforce-standards-namespace-labels/
+        */}}
+        apiVersion: pod-security.admission.config.k8s.io/v1
+        kind: PodSecurityConfiguration
+        {{- /*
+        # Defaults applied when a mode label is not set.
+        #
+        # Level label values must be one of:
+        # - "privileged" (default)
+        # - "baseline"
+        # - "restricted"
+        #
+        # Version label values must be one of:
+        # - "latest" (default)
+        # - specific version like "v1.31"
+        */}}
+        defaults:
+          audit: "{{ .Values.admissionPlugins.podSecurity.defaultAudit }}"
+          audit-version: {{ include "cluster.cp.k8sVersionMajor" . | quote }}
+          warn: "{{ .Values.admissionPlugins.podSecurity.defaultWarn }}"
+          warn-version: {{ include "cluster.cp.k8sVersionMajor" . | quote }}
+          enforce: "{{ .Values.admissionPlugins.podSecurity.defaultEnforce }}"
+          enforce-version: {{ include "cluster.cp.k8sVersionMajor" . | quote }}
+        exemptions:
+          {{- with .Values.admissionPlugins.podSecurity.exemptions.usernames }}
+          usernames: {{- toYaml . | nindent 10 }}
+          {{- end }}
+          {{- with .Values.admissionPlugins.podSecurity.exemptions.runtimeClasses }}
+          runtimeClasses: {{- toYaml . | nindent 10 }}
+          {{- end }}
+          namespaces: {{- toYaml .Values.admissionPlugins.podSecurity.exemptions.namespaces | nindent 10 }}
+    {{- end }}
+    {{- /*
+    {{- if not .Values.kubeadm.disableKubeProxy }}
+    # https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/#kubelet-config-k8s-io-v1beta1-KubeletConfiguration
+    - path: /etc/kubernetes/patches/kubeproxyconfiguration0+strategic.json
+      owner: root:root
+      permissions: "0644"
+      content: |-
+        {
+          "apiVersion": "kubeproxy.config.k8s.io/v1alpha1",
+          "kind": "KubeletConfiguration",
+          "metricsBindAddress": "0.0.0.0:10249"
+        }
+    {{- end }}
+    */}}
+    {{- /*
+    # InitConfiguration along with ClusterConfiguration are the configurations necessary for the init command
+    # https://kubernetes.io/docs/reference/config-api/kubeadm-config.v1beta3/#kubeadm-k8s-io-v1beta3-InitConfiguration
+    */}}
+    initConfiguration:
+      {{- if .Values.kubeadm.disableKubeProxy }}
+      skipPhases:
+      - addon/kube-proxy
+      {{- end }}
+      nodeRegistration:
+        criSocket: unix:///var/run/containerd/containerd.sock
+        {{- /*
+        https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/
+        https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/
+        https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap/kubelet-config
+        */}}
+        kubeletExtraArgs:
+          anonymous-auth: "false"
+          authentication-token-webhook: "true"
+          authorization-mode: Webhook
+          cloud-provider: external
+          event-qps: "1"
+          # feature-gates: RotateKubeletServerCertificate=true
+          kubeconfig: /etc/kubernetes/kubelet.conf
+          max-pods: "120"
+          node-labels: "node.kubernetes.io/role=control-plane"
+          protect-kernel-defaults: "true"
+          read-only-port: "0"
+          rotate-certificates: "true"
+          rotate-server-certificates: "true"
+          seccomp-default: "true"
+          streaming-connection-idle-timeout: "5m"
+          tls-min-version: VersionTLS12
+          tls-cipher-suites: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+      {{- /*
+      # https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap/kubelet-config.html?highlight=KubeletConfiguration#use-kubeadms-kubeletconfiguration-patch-target
+      # kubectl explain KubeadmControlPlane.spec.kubeadmConfigSpec.initConfiguration.patches
+      patches:
+        directory: /etc/kubernetes/patches
+      */}}
+    {{- /*
+    # JoinConfiguration is the kubeadm configuration for the join command
+    # https://kubernetes.io/docs/reference/config-api/kubeadm-config.v1beta3/#kubeadm-k8s-io-v1beta3-JoinConfiguration
+    */}}
+    joinConfiguration:
+      {{- if .Values.kubeadm.kubeApiServer.disablePublicAccessClusterInfoConfigMap }}
+      discovery:
+        file:
+          kubeConfig:
+            # TODO how to set this?
+            user:
+              # exec:
+              #   apiVersion: client.authentication.k8s.io/v1
+              #   command: |
+              #     cat <<EOF
+              #     {
+              #       "apiVersion": "client.authentication.k8s.io/v1",
+              #       "kind": "ExecCredential",
+              #       "spec": {},
+              #       "status": {}
+              #     }
+              #     EOF
+          kubeConfigPath: /etc/kubernetes/discovery-kubeconfig.yaml
+      {{- end }}
+      nodeRegistration:
+        criSocket: unix:///var/run/containerd/containerd.sock
+        {{- /*
+        https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/
+        https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/
+        https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap/kubelet-config
+        */}}
+        kubeletExtraArgs:
+          anonymous-auth: "false"
+          authentication-token-webhook: "true"
+          authorization-mode: Webhook
+          cloud-provider: external
+          event-qps: "1"
+          # feature-gates: RotateKubeletServerCertificate=true
+          kubeconfig: /etc/kubernetes/kubelet.conf
+          max-pods: "120"
+          node-labels: "node.kubernetes.io/role=control-plane"
+          protect-kernel-defaults: "true"
+          read-only-port: "0"
+          rotate-certificates: "true"
+          rotate-server-certificates: "true"
+          seccomp-default: "true"
+          streaming-connection-idle-timeout: "5m"
+          tls-min-version: VersionTLS12
+          tls-cipher-suites: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+      {{- /*
+      # https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap/kubelet-config.html?highlight=KubeletConfiguration#use-kubeadms-kubeletconfiguration-patch-target
+      # kubectl explain KubeadmControlPlane.spec.kubeadmConfigSpec.joinConfiguration.patches
+      patches:
+        directory: /etc/kubernetes/patches
+      */}}
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: HCloudMachineTemplate
+      name: {{ include "cp-hcloud-machine-template-name" . }}
+  replicas: {{ $machines.cp.replicas }}
+  version: {{ $machines.cp.k8sVersion }}
+  {{- /*
+  # controls how control plane machine remediation happens.
+  # remediationStrategy:
+  # rolloutAfter:
+  # rolloutBefore:
+  # rolloutStrategy:
+  */}}
+{{- end }}
+{{- end -}}

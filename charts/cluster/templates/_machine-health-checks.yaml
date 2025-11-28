@@ -1,0 +1,91 @@
+{{- define "cluster.machine-health-checks" -}}
+{{- $machines := (include "machines" .) | fromYaml }}
+{{- if $machines.cp.healthCheck.enabled }}
+{{- if and (eq .Values.capi.providers.infrastructure.name "hetzner") $machines.cp.remediation.enabled }}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: HCloudRemediationTemplate
+metadata:
+  name: cp-remediation
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cluster.labels" . | nindent 4 }}
+spec:
+  template:
+    spec:
+      strategy:
+        retryLimit: {{ $machines.cp.remediation.retryLimit }}
+        timeout: {{ $machines.cp.remediation.timeout }}
+        type: {{ $machines.cp.remediation.type }}
+{{- end }}
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineHealthCheck
+metadata:
+  name: {{ include "cp-name" . }}-unhealthy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cluster.labels" . | nindent 4 }}
+spec:
+  clusterName: {{ include "cluster-name" . }}
+  maxUnhealthy: {{ $machines.cp.healthCheck.maxUnhealthy }}
+  nodeStartupTimeout: {{ $machines.cp.healthCheck.nodeStartupTimeout }}
+  {{- if $machines.cp.remediation.enabled }}
+  remediationTemplate:
+    {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: HCloudRemediationTemplate
+    {{- end }}
+    name: cp-remediation
+  {{- end }}
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/control-plane: ""
+  unhealthyConditions: {{- $machines.cp.healthCheck.unhealthyConditions | toYaml | nindent 2 }}
+{{- end }}
+{{- if $machines.worker.healthCheck.enabled }}
+{{- if and (eq .Values.capi.providers.infrastructure.name "hetzner") $machines.worker.remediation.enabled }}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: HCloudRemediationTemplate
+metadata:
+  name: worker-remediation
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cluster.labels" . | nindent 4 }}
+spec:
+  template:
+    spec:
+      strategy:
+        retryLimit: {{ $machines.worker.remediation.retryLimit }}
+        timeout: {{ $machines.worker.remediation.timeout }}
+        type: {{ $machines.worker.remediation.type }}
+{{- end }}
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineHealthCheck
+metadata:
+  name: {{ include "cluster-name" . }}-worker-unhealthy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cluster.labels" . | nindent 4 }}
+  # annotations:
+  #   argocd.argoproj.io/sync-wave: ""
+spec:
+  clusterName: {{ include "cluster-name" . }}
+  maxUnhealthy: {{ $machines.worker.healthCheck.maxUnhealthy }}
+  nodeStartupTimeout: {{ $machines.worker.healthCheck.nodeStartupTimeout }}
+  {{- if $machines.worker.remediation.enabled }}
+  remediationTemplate:
+    {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: HCloudRemediationTemplate
+    {{- end }}
+    name: worker-remediation
+  {{- end }}
+  selector:
+    matchLabels:
+      nodepool: {{ include "worker-name" . }}
+  unhealthyConditions: {{- $machines.worker.healthCheck.unhealthyConditions | toYaml | nindent 2 }}
+{{- end }}
+{{- end -}}
