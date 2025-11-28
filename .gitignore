@@ -1,2 +1,5 @@
-charts/bootstrap-configs
-charts/capi-providers
+# Helm artifacts
+*.tgz
+charts/*/charts/
+charts/*/Chart.lock
+local.md

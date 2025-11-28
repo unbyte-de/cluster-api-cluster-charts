@@ -16,6 +16,6 @@ indent_size = 2
 [*.{yml,yaml}]
 indent_size = 2
 
-# Makefile needs tabs
-[Makefile]
-indent_style = tab
+# # Makefile needs tabs
+# [Makefile]
+# indent_style = tab

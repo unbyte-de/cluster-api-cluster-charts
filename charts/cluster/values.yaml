@@ -80,7 +80,7 @@ exports:
         buildTimestamp: ""
         imageName: >-
           {{- $machines := (include "machines" $) | fromYaml -}}
-          cluster-api-ubuntu-{{ $machines.cp.osVersion }}-{{ $machines.cp.k8sVersion }}-{{ $machines.cp.buildTimestamp }}
+          cluster-api-ubuntu-{{ $machines.worker.osVersion }}-{{ $machines.worker.k8sVersion }}-{{ $machines.worker.buildTimestamp }}
         replicas: 3
         autoscaler:
           enabled: false

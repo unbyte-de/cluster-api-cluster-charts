@@ -41,7 +41,7 @@ hCloud:
       buildTimestamp: "1744739363"
       imageName: >-
         {{- $machines := (include "machines" $) | fromYaml -}}
-        cluster-api-ubuntu-{{ $machines.cp.osVersion }}-{{ $machines.cp.k8sVersion }}-{{ $machines.cp.buildTimestamp }}
+        cluster-api-ubuntu-{{ $machines.worker.osVersion }}-{{ $machines.worker.k8sVersion }}-{{ $machines.worker.buildTimestamp }}
       replicas: 3
       autoscaler:
         enabled: true
@@ -72,7 +72,7 @@ kubeadm:
       enabled: true
       clientId: kubectl-oidc-{{ include "cluster-name" . }}
       issuerUrl: https://sso.mgt.unbyte.de/realms/unbyte
-      # Since our issuer uses letsencrypt cert, we dont need to set the ca cert
+      # Since our issuer uses letsencrypt cert, we don't need to set the ca cert
       caFile: ""
       useExistingSecretForCa: false
     # # Increased default toleration times for NotReady and Unreachable states.

@@ -260,12 +260,12 @@ files:
 
 {{- if or (eq .Values.capi.providers.controlPlane.name "talos") (eq .Values.capi.providers.controlPlane.name "kubeadm") }}
 {{ else }}
-{{- fail "Please set which CAPI CP provider to use. Supported providers: 'talos'." }}
+{{- fail "Please set which CAPI CP provider to use. Supported providers: 'kubeadm', 'talos'." }}
 {{- end }}
 
 {{- if or (eq .Values.capi.providers.bootstrap.name "talos") (eq .Values.capi.providers.bootstrap.name "kubeadm") }}
 {{ else }}
-{{- fail "Please set which CAPI bootstrap provider to use. Supported providers: 'talo'." }}
+{{- fail "Please set which CAPI bootstrap provider to use. Supported providers: 'kubeadm', 'talos'." }}
 {{- end }}
 
 {{/* Trim a version like "v1.31.4" to "v1.31" */}}
