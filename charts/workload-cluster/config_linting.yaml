@@ -1,0 +1,14 @@
+---
+cluster:
+  name: "unbyte-hcloud-fsn1-linting-01"
+
+hCloud:
+  networking:
+    servicesIpv4Cidr: "10.3.8.0/21"
+    podsIpv4Cidr: "10.3.16.0/20"
+
+install:
+  # enabled: false
+  # # deleteAll: true
+  envName: dev
+  orgName: unbyte

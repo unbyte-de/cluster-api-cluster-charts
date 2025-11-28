@@ -1,0 +1,5 @@
+# Helm artifacts
+*.tgz
+charts/*/charts/
+charts/*/Chart.lock
+local.md

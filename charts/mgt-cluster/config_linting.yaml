@@ -1,0 +1,12 @@
+---
+cluster:
+  name: "unbyte-hcloud-fsn1-linting-01"
+
+hCloud:
+  networking:
+    servicesIpv4Cidr: "10.1.8.0/21"
+    podsIpv4Cidr: "10.1.16.0/20"
+
+install:
+  envName: prod
+  capiMgtName: capi-mgt

@@ -1,0 +1,12 @@
+---
+repos:
+- repo: https://github.com/editorconfig-checker/editorconfig-checker.python
+  rev: "3.5.0"
+  hooks:
+  - id: editorconfig-checker
+    args: [--exclude=LICENSE]
+- repo: https://github.com/adrienverge/yamllint.git
+  rev: v1.37.1
+  hooks:
+  - id: yamllint
+    args: [-c=./.yamllint]

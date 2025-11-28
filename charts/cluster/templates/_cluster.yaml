@@ -1,0 +1,137 @@
+{{- define "cluster.cluster" -}}
+---
+{{- $networking := (include "networking" .) | fromYaml }}
+{{- $machines := (include "machines" .) | fromYaml }}
+{{- /*
+https://doc.crds.dev/github.com/kubernetes-sigs/cluster-api/cluster.x-k8s.io/Cluster/v1beta1@v1.8.5
+*/}}
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: {{ include "cluster-name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    name: {{ include "cluster-name" . }}
+    {{- include "cluster.labels" . | nindent 4 }}
+  # annotations:
+  #   argocd.argoproj.io/sync-wave: ""
+spec:
+  clusterNetwork:
+    apiServerPort: {{ $networking.apiPort }}
+    # Domain name for services.
+    # serviceDomain:
+    services:
+      cidrBlocks:
+      - {{ $networking.servicesIpv4Cidr | quote }}
+    pods:
+      cidrBlocks:
+      - {{ $networking.podsIpv4Cidr | quote }}
+  {{- /*
+  ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
+  See HetznerCluster.spec.controlPlaneEndpoint
+  */}}
+  controlPlaneEndpoint:
+    {{- if .Values.hCloud.lb.existing.ip }}
+    host: {{ .Values.hCloud.lb.existing.ip | quote }}
+    {{- else }}
+    host: ""
+    {{- end }}
+    port: {{ $networking.apiPort }}
+  controlPlaneRef:
+    {{- if eq .Values.capi.providers.controlPlane.name "talos" }}
+    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    kind: TalosControlPlane
+    {{- else if eq .Values.capi.providers.controlPlane.name "kubeadm" }}
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: KubeadmControlPlane
+    {{- end }}
+    name: {{ include "cp-name" . }}
+    namespace: {{ .Release.Namespace }}
+  infrastructureRef:
+    {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: HetznerCluster
+    {{- end }}
+    name: {{ include "cluster-name" . }}
+    namespace: {{ .Release.Namespace }}
+{{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
+---
+{{- /*
+`k explain HetznerCluster` for more information
+https://syself.com/docs/caph/reference/hetzner-cluster
+In HetznerCluster you can define everything related to the general components of the cluster as well as those properties, which are valid cluster-wide.
+*/}}
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: HetznerCluster
+metadata:
+  name: {{ include "cluster-name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cluster.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  controlPlaneEndpoint:
+    {{- /*
+    Set by the controller.
+    Set to the IP of the Load Balancer.
+    The endpoint to communicate with the control plane.
+    */}}
+    {{- if .Values.hCloud.lb.existing.ip }}
+    host: {{ .Values.hCloud.lb.existing.ip | quote }}
+    {{- else }}
+    host: ""
+    {{- end }}
+    port: {{ $networking.apiPort }}
+  controlPlaneLoadBalancer:
+    enabled: true
+    {{- if .Values.hCloud.lb.existing.ip }}
+    name: {{ include "lb-existing-name" . }}
+    region: {{ $networking.region }}
+      {{- with .Values.hCloud.lb.existing.extraServices }}
+    extraServices:
+      {{- toYaml . | nindent 4 }}
+      {{- end }}
+    {{- else }}
+      {{- range $key, $value := .Values.hCloud.lb.new }}
+      {{- if has $key (list "region" "port") }}
+      {{- $key | nindent 4 }}: {{ tpl $value $ | trim }}
+      {{- else if eq (kindOf $value) "slice" }}
+      {{- $key | nindent 4 }}: {{- toYaml $value | nindent 4 }}
+      {{- else }}
+      {{- $key | nindent 4 }}: {{ $value }}
+      {{- end }}
+      {{- end }}
+    {{- end }}
+  controlPlaneRegions:
+  - {{ $networking.region }}
+  {{- /*
+  HCloudNetwork defines details about the private Network for Hetzner Cloud.
+  If left empty, no private Network is configured.
+  */}}
+  hcloudNetwork:
+    enabled: {{ $networking.hcloudNetworkEnabled }}
+    {{- if $networking.hcloudNetworkEnabled }}
+    cidrBlock: {{ $networking.networkIpv4Cidr | quote }}
+    networkZone: {{ $networking.networkZone }}
+    subnetCidrBlock: {{ $networking.subnetIpv4Cidr | quote }}
+    {{- end }}
+  hcloudPlacementGroups: {{- toYaml $machines.placementGroups | nindent 2 }}
+  {{- /*
+  Reference to secret where Hetzner API credentials are stored
+  */}}
+  hetznerSecretRef:
+    name: {{ .Values.hCloud.token.secretName }}
+    key:
+      hcloudToken: {{ .Values.hCloud.token.secretKey }}
+      hetznerRobotPassword: robot-password
+      hetznerRobotUser: robot-user
+  {{- if and (ne .Values.capi.providers.controlPlane.name "talos") .Values.hCloud.sshKeys }}
+  sshKeys:
+    hcloud:
+    {{- range .Values.hCloud.sshKeys }}
+    - name: {{ . }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- end -}}

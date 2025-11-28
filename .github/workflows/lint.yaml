@@ -1,0 +1,67 @@
+name: Lint Charts
+
+on:
+  pull_request:
+    paths:
+      - 'charts/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'charts/**'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # https://github.com/actions/setup-python
+      - name: Set up python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      # https://github.com/Azure/setup-helm
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'latest'
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      # - name: Lint bootstrap-configs
+      #   run: |
+      #     helm dependency update charts/bootstrap-configs
+      #     helm lint charts/bootstrap-configs
+
+      # - name: Lint capi-providers
+      #   run: |
+      #     helm dependency update charts/capi-providers
+      #     helm lint charts/capi-providers
+
+      - name: Lint cluster
+        run: |
+          helm dependency update charts/cluster
+          helm lint charts/cluster
+
+      - name: Lint mgt-cluster
+        run: |
+          helm dependency update charts/mgt-cluster
+          helm lint charts/mgt-cluster -f charts/mgt-cluster/config_linting.yaml
+          helm template charts/mgt-cluster -f charts/mgt-cluster/config_linting.yaml --output-dir /tmp/mgt-cluster-linting-output
+          yamllint /tmp/mgt-cluster-linting-output
+          rm -rf /tmp/mgt-cluster-linting-output
+
+      - name: Lint workload-cluster
+        run: |
+          helm dependency update charts/workload-cluster
+          helm lint charts/workload-cluster -f charts/workload-cluster/config_linting.yaml
+          helm template charts/workload-cluster -f charts/workload-cluster/config_linting.yaml --output-dir /tmp/workload-cluster-linting-output
+          yamllint /tmp/workload-cluster-linting-output
+          rm -rf /tmp/workload-cluster-linting-output

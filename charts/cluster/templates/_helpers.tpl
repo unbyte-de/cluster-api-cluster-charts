@@ -1,0 +1,276 @@
+{{/*
+Expand the name of the chart.
+*/}}
+{{- define "cluster.name" -}}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Create a default fully qualified app name.
+We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
+If release name contains chart name it will be used as a full name.
+*/}}
+{{- define "cluster.fullname" -}}
+{{- if .Values.fullnameOverride }}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- $name := default .Chart.Name .Values.nameOverride }}
+{{- if contains $name .Release.Name }}
+{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Create chart name and version as used by the chart label.
+*/}}
+{{- define "cluster.chart" -}}
+{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Common labels
+*/}}
+{{- define "cluster.labels" -}}
+helm.sh/chart: {{ include "cluster.chart" . }}
+{{ include "cluster.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
+Selector labels
+*/}}
+{{- define "cluster.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "cluster.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- if or .Values.hCloud.lb.existing.ip .Values.hCloud.lb.new }}
+{{ else }}
+{{- fail "Please use an existing LB via '.Values.hCloud.lb.existing' or add configuration for a new one via '.Values.hCloud.lb.new'." }}
+{{- end }}
+
+{{- if eq .Values.capi.providers.core.name "cluster-api" }}
+{{ else }}
+{{- fail "Please set which CAPI core provider to use. Supported providers: 'cluster-api'." }}
+{{- end }}
+
+{{/*
+Merge hCloud.networking with networking. hCloud.networking overwrites.
+*/}}
+{{- define "networking" -}}
+  {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
+  {{- mustMergeOverwrite .Values.networking .Values.hCloud.networking | toYaml }}
+  {{- end }}
+{{- end }}
+
+{{/*
+Merge hCloud.machines with machines. hCloud.machines overwrites.
+*/}}
+{{- define "machines" -}}
+  {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
+  {{- mustMergeOverwrite .Values.machines .Values.hCloud.machines | toYaml }}
+  {{- end }}
+{{- end }}
+
+{{- define "cluster-name" -}}
+{{- .Values.cluster.name | default .Release.Name }}
+{{- end }}
+
+{{- define "lb-existing-name" -}}
+{{- .Values.hCloud.lb.existing.name | default .Release.Name }}
+{{- end }}
+
+{{- define "cp-name" -}}
+{{- printf "%s-cp" (include "cluster-name" .) }}
+{{- end }}
+
+{{- define "worker-name" -}}
+{{- printf "%s-worker" (include "cluster-name" .) }}
+{{- end }}
+
+{{- define "cp-hcloud-machine-template-spec" -}}
+{{- $machines := (include "machines" .) | fromYaml -}}
+{{- /*
+PublicNetwork specifies information for public networks. It defines the specs about the primary IP address of the server.
+If both IPv4 and IPv6 are disabled, then the private network has to be enabled.
+*/ -}}
+publicNetwork:
+  enableIPv4: true
+  enableIPv6: false
+imageName: {{ tpl $machines.cp.imageName . }}
+placementGroupName: {{ $machines.cp.placementGroupName }}
+type: {{ $machines.cp.type }}
+{{- end }}
+{{- define "cp-hcloud-machine-template-name" -}}
+{{- printf "%s-%s" (include "cp-name" .) ((include "cp-hcloud-machine-template-spec" .) | sha256sum | trunc 16) }}
+{{- end }}
+{{- define "cp-hcloud-machine-template-labels" -}}
+{{- $machines := (include "machines" .) | fromYaml -}}
+capi/osVersion: {{ $machines.cp.osVersion | quote }}
+capi/k8sVersion: {{ $machines.cp.k8sVersion | quote }}
+capi/imageName: {{ tpl $machines.cp.imageName . | quote }}
+{{- end }}
+
+{{- define "worker-hcloud-machine-template-spec" -}}
+{{- $machines := (include "machines" .) | fromYaml -}}
+publicNetwork:
+  enableIPv4: true
+  enableIPv6: false
+imageName: {{ tpl $machines.worker.imageName . }}
+placementGroupName: {{ $machines.worker.placementGroupName }}
+type: {{ $machines.worker.type }}
+{{- end }}
+{{- define "worker-hcloud-machine-template-name" -}}
+{{- printf "%s-%s" (include "worker-name" .) ((include "worker-hcloud-machine-template-spec" .) | sha256sum | trunc 16) }}
+{{- end }}
+{{- define "worker-hcloud-machine-template-labels" -}}
+{{- $machines := (include "machines" .) | fromYaml -}}
+capi/osVersion: {{ $machines.worker.osVersion | quote }}
+capi/k8sVersion: {{ $machines.worker.k8sVersion | quote }}
+capi/imageName: {{ tpl $machines.worker.imageName . | quote }}
+{{- end }}
+
+{{- define "worker-kubeadm-config-template-spec" -}}
+joinConfiguration:
+  nodeRegistration:
+    criSocket: unix:///var/run/containerd/containerd.sock
+    # https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/
+    # https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/
+    # https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap/kubelet-config
+    kubeletExtraArgs:
+      anonymous-auth: "false"
+      authentication-token-webhook: "true"
+      authorization-mode: Webhook
+      cloud-provider: external
+      event-qps: "1"
+      # feature-gates: RotateKubeletServerCertificate=true
+      kubeconfig: /etc/kubernetes/kubelet.conf
+      max-pods: "220"
+      node-labels: "node.kubernetes.io/role=worker"
+      protect-kernel-defaults: "true"
+      read-only-port: "0"
+      rotate-certificates: "true"
+      rotate-server-certificates: "true"
+      seccomp-default: "true"
+      streaming-connection-idle-timeout: "5m"
+      tls-min-version: VersionTLS12
+      tls-cipher-suites: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+  # https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap/kubelet-config.html?highlight=KubeletConfiguration#use-kubeadms-kubeletconfiguration-patch-target
+  # kubectl explain KubeadmControlPlane.spec.kubeadmConfigSpec.joinConfiguration.patches
+  # patches:
+  #   directory: /etc/kubernetes/patches
+  {{- if .Values.kubeadm.kubeApiServer.disablePublicAccessClusterInfoConfigMap }}
+  discovery:
+    file:
+      kubeConfig:
+        {{- /*
+        # TODO how to set this?
+        user:
+          # exec:
+          #   apiVersion: client.authentication.k8s.io/v1
+          #   command: |
+          #     cat <<EOF
+          #     {
+          #       "apiVersion": "client.authentication.k8s.io/v1",
+          #       "kind": "ExecCredential",
+          #       "spec": {},
+          #       "status": {}
+          #     }
+          #     EOF
+      */}}
+      kubeConfigPath: /etc/kubernetes/discovery-kubeconfig.yaml
+  {{- end }}
+{{- /*
+preKubeadmCommands:
+- bash /etc/kubernetes/preKubeadmCommands.sh 2>&1 | tee -a /var/log/preKubeadmCommands.log
+*/}}
+postKubeadmCommands:
+- bash /etc/kubernetes/postKubeadmCommands.sh 2>&1 | tee -a /var/log/postKubeadmCommands.log
+files:
+{{- /*
+- path: /etc/kubernetes/preKubeadmCommands.sh
+  owner: root:root
+  permissions: "0700"
+  content: |-
+    #!/usr/bin/env bash
+    set -eu
+    echo "preKubeadmCommands started!"
+
+    # {{- if .Values.kubeadm.kubeApiServer.disablePublicAccessClusterInfoConfigMap }}
+    # if [ -f /etc/kubernetes/discovery-kubeconfig.yaml ]; then
+    #   # cat /run/kubeadm/kubeadm-join-config.yaml
+    #   yq eval '.users = null' -i /etc/kubernetes/discovery-kubeconfig.yaml
+    #   yq eval '.clusters.0.name = ""' -i /etc/kubernetes/discovery-kubeconfig.yaml
+    #   yq eval '.contexts = null' -i /etc/kubernetes/discovery-kubeconfig.yaml
+    #   yq eval '.current-context = ""' -i /etc/kubernetes/discovery-kubeconfig.yaml
+    # fi
+    # {{- end }}
+    echo "Done!"
+*/}}
+- path: /etc/kubernetes/postKubeadmCommands.sh
+  owner: root:root
+  permissions: "0700"
+  content: |-
+    #!/usr/bin/env bash
+    set -eu
+    echo "postKubeadmCommands started!"
+
+    {{- if .Values.kubeadm.setKubeletNodeIp }}
+    NODEIP=$(curl -s https://api.ipify.org | tr -d '\n')
+    echo "$NODEIP"
+    sed -i "/--node-ip/d" /var/lib/kubelet/kubeadm-flags.env
+    echo "KUBELET_KUBEADM_ARGS=\"--node-ip=$NODEIP $(cat /var/lib/kubelet/kubeadm-flags.env \
+      | sed 's/KUBELET_KUBEADM_ARGS=\"//')" > /var/lib/kubelet/kubeadm-flags.env
+    systemctl restart kubelet
+    {{- end }}
+
+    {{- with .Values.kubeadm.postKubeadm.extraCommandsWorker }}
+    {{- . | nindent 10 }}
+    {{- end }}
+    echo "Done!"
+{{- /*
+{{- if not .Values.kubeadm.disableKubeProxy }}
+# https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/#kubelet-config-k8s-io-v1beta1-KubeletConfiguration
+- path: /etc/kubernetes/patches/kubeproxyconfiguration0+strategic.json
+  owner: root:root
+  permissions: "0644"
+  content: |-
+    {
+      "apiVersion": "kubeproxy.config.k8s.io/v1alpha1",
+      "kind": "KubeletConfiguration",
+      "metricsBindAddress": "0.0.0.0:10249"
+    }
+{{- end }}
+*/}}
+{{- end }}
+{{- define "worker-kubeadm-config-template-name" -}}
+{{- printf "%s-%s" (include "worker-name" .) ((include "worker-kubeadm-config-template-spec" .) | sha256sum | trunc 16) }}
+{{- end }}
+
+{{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
+{{ else }}
+  {{- fail "Please set which CAPI infrastructure provider to use. Supported providers: 'hetzner'." }}
+{{- end }}
+
+{{- if or (eq .Values.capi.providers.controlPlane.name "talos") (eq .Values.capi.providers.controlPlane.name "kubeadm") }}
+{{ else }}
+{{- fail "Please set which CAPI CP provider to use. Supported providers: 'kubeadm', 'talos'." }}
+{{- end }}
+
+{{- if or (eq .Values.capi.providers.bootstrap.name "talos") (eq .Values.capi.providers.bootstrap.name "kubeadm") }}
+{{ else }}
+{{- fail "Please set which CAPI bootstrap provider to use. Supported providers: 'kubeadm', 'talos'." }}
+{{- end }}
+
+{{/* Trim a version like "v1.31.4" to "v1.31" */}}
+{{- define "cluster.cp.k8sVersionMajor" -}}
+{{- $machines := (include "machines" .) | fromYaml -}}
+{{- $v := $machines.cp.k8sVersion | splitList "." -}}
+{{- printf "%s.%s" (index $v 0) (index $v 1) -}}
+{{- end -}}

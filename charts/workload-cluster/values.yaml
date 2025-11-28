@@ -1,0 +1,530 @@
+---
+# cluster:
+#   # Default is the release name.
+#   name: "unbyte-hcloud-fsn1-dev-01"
+
+hCloud:
+  sshKeys:
+  - KenanErdogan
+  - MarcZimmermann
+  token:
+    existingSecret: true
+    move: false
+  # This is required to be set for each unbyte cluster.
+  # networking:
+  #   servicesIpv4Cidr: "10.3.8.0/21"
+  #   podsIpv4Cidr: "10.3.16.0/20"
+  lb:
+    new:
+      algorithm: round_robin
+      port: >-
+        {{- $networking := (include "networking" .) | fromYaml }}
+        {{ $networking.apiPort }}
+      region: >-
+        {{- $networking := (include "networking" .) | fromYaml }}
+        {{ $networking.region }}
+      type: lb11
+  machines:
+    cp:
+      osVersion: "2404"
+      k8sVersion: "v1.31.4"
+      buildTimestamp: "1744739363"
+      imageName: >-
+        {{- $machines := (include "machines" $) | fromYaml -}}
+        cluster-api-ubuntu-{{ $machines.cp.osVersion }}-{{ $machines.cp.k8sVersion }}-{{ $machines.cp.buildTimestamp }}
+      replicas: 3
+      remediation:
+        enabled: true
+    worker:
+      osVersion: "2404"
+      k8sVersion: "v1.31.4"
+      buildTimestamp: "1744739363"
+      imageName: >-
+        {{- $machines := (include "machines" $) | fromYaml -}}
+        cluster-api-ubuntu-{{ $machines.worker.osVersion }}-{{ $machines.worker.k8sVersion }}-{{ $machines.worker.buildTimestamp }}
+      replicas: 3
+      autoscaler:
+        enabled: true
+        minSize: "3"
+        maxSize: "5"
+      remediation:
+        enabled: true
+
+etcKubernetes:
+  gitRepoUrl: https://github.com/unbyte-de/etc-kubernetes.git
+
+admissionPlugins:
+  podSecurity:
+    enabled: false
+    # exemptions:
+    #   namespaces:
+    #   - kube-system
+    #   - kube-prometheus-stack
+    #   - promtail
+    #   - loki
+    #   - trivy-system
+
+kubeadm:
+  disableKubeProxy: true
+  setKubeletNodeIp: true
+  kubeApiServer:
+    oidc:
+      enabled: true
+      clientId: kubectl-oidc-{{ include "cluster-name" . }}
+      issuerUrl: https://sso.mgt.unbyte.de/realms/unbyte
+      # Since our issuer uses letsencrypt cert, we don't need to set the ca cert
+      caFile: ""
+      useExistingSecretForCa: false
+    # # Increased default toleration times for NotReady and Unreachable states.
+    # # So that brief network blips, control-plane upgrades, or AZ hiccups won’t trigger mass pod evictions.
+    # # That reduces restart storms and downstream throttling (DB reconnects, cache cold starts, etc.).
+    # defaultNotReadyTolerationSeconds: "600"
+    # defaultUnreachableTolerationSeconds: "600"
+  postKubeadm:
+    # yamllint disable rule:line-length
+    extraCommandsCp: |-
+      kubectl rollout restart -n argocd deployment.apps/argocd-applicationset-controller deployment.apps/argocd-repo-server deployment.apps/argocd-server statefulset.apps/argocd-application-controller || true
+      echo "Creating etcd-client-cert secret for prometheus..."
+      kubectl create ns kube-prometheus-stack --dry-run=client -o yaml | kubectl apply -f -
+      kubectl create secret generic etcd-client-cert -n kube-prometheus-stack --from-file=ca.crt=/etc/kubernetes/pki/etcd/ca.crt --from-file=tls.crt=/etc/kubernetes/pki/etcd/healthcheck-client.crt --from-file=tls.key=/etc/kubernetes/pki/etcd/healthcheck-client.key --dry-run=client -o yaml | kubectl apply -f -
+      sleep 30
+      until kubectl -n argocd annotate application --all argocd.argoproj.io/refresh=hard --overwrite; do sleep 1; done
+    # yamllint enable rule:line-length
+  etcd:
+    encryption:
+      enabled: true
+
+# Here we define initial resources which are applied by CAPI (ClusterResourceset) just after cluster creation.
+# Note that there are also some installations defined in the cluster chart such as `cilium` and `Hetzner Cloud Cloud Controller`,
+install:
+  # enabled: false
+  # # This is only in effect if `enabled` is false. Then all resources related for this initial install process will be deleted.
+  # deleteAll: true
+  envName: dev
+  orgName: unbyte
+  extraRoles: |-
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: {{ include "cluster-name" . }}-install-2
+      namespace: {{ .Release.Namespace }}
+    rules:
+    - apiGroups: [""]
+      resources: ["secrets"]
+      verbs: ["get", "list"]
+      resourceNames: ['{{ include "cluster-name" . }}-vault-approle']
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: {{ include "cluster-name" . }}-install-2
+      namespace: {{ .Release.Namespace }}
+    subjects:
+    - kind: ServiceAccount
+      name: {{ include "cluster-name" . }}-install
+      namespace: {{ .Release.Namespace }}
+    roleRef:
+      kind: Role
+      name: {{ include "cluster-name" . }}-install-2
+      apiGroup: rbac.authorization.k8s.io
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: {{ include "cluster-name" . }}-install
+      namespace: external-secrets
+    rules:
+    - apiGroups: [""]
+      resources: ["secrets"]
+      verbs: ["get", "list"]
+      resourceNames: ['unbyte-mgt-vault-client-cert']
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: {{ include "cluster-name" . }}-install
+      namespace: external-secrets
+    subjects:
+    - kind: ServiceAccount
+      name: {{ include "cluster-name" . }}-install
+      namespace: {{ .Release.Namespace }}
+    roleRef:
+      kind: Role
+      name: {{ include "cluster-name" . }}-install
+      apiGroup: rbac.authorization.k8s.io
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: {{ include "cluster-name" . }}-install
+      namespace: kube-system
+    rules:
+    - apiGroups: [""]
+      resources: ["configmaps"]
+      verbs: ["get", "list"]
+      resourceNames: ["custom-dns"]
+    - apiGroups: [""]
+      resources: ["secrets"]
+      verbs: ["get", "list"]
+      resourceNames: ["unbyte-mgt-ingress-nginx-lb-ip"]
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: {{ include "cluster-name" . }}-install
+      namespace: kube-system
+    subjects:
+    - kind: ServiceAccount
+      name: {{ include "cluster-name" . }}-install
+      namespace: {{ .Release.Namespace }}
+    roleRef:
+      kind: Role
+      name: {{ include "cluster-name" . }}-install
+      apiGroup: rbac.authorization.k8s.io
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: {{ include "cluster-name" . }}-install
+      namespace: argocd
+    rules:
+    - apiGroups: [""]
+      resources: ["secrets"]
+      verbs: ["get", "list"]
+      resourceNames: ["repo-charts"]
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: {{ include "cluster-name" . }}-install
+      namespace: argocd
+    subjects:
+    - kind: ServiceAccount
+      name: {{ include "cluster-name" . }}-install
+      namespace: {{ .Release.Namespace }}
+    roleRef:
+      kind: Role
+      name: {{ include "cluster-name" . }}-install
+      apiGroup: rbac.authorization.k8s.io
+    {{- if .Values.kubeadm.disableKubeProxy }}
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: {{ include "cluster-name" . }}-install-3
+      namespace: {{ .Release.Namespace }}
+    rules:
+    - apiGroups: ["infrastructure.cluster.x-k8s.io"]
+      resources: ["hetznerclusters"]
+      verbs: ["get", "list"]
+      resourceNames: ["{{ include "cluster-name" . }}"]
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: {{ include "cluster-name" . }}-install-3
+      namespace: {{ .Release.Namespace }}
+    subjects:
+    - kind: ServiceAccount
+      name: {{ include "cluster-name" . }}-install
+      namespace: {{ .Release.Namespace }}
+    roleRef:
+      kind: Role
+      name: {{ include "cluster-name" . }}-install-3
+      apiGroup: rbac.authorization.k8s.io
+    {{- end }}
+  resources:
+    # Update CoreDNS config to use our PowerDNS in `capi-mgt` cluster.
+    # Note that here we get IP of PowerDNS recursor server initially from `capi-mgt` cluster.
+    41-bootstrap-configs:
+      enabled: true
+      strategy: Reconcile
+      repoUrl: https://gitlab.com/api/v4/projects/65336103/packages/helm/stable
+      repoCreds:
+        username: "$(kubectl get secret -n argocd repo-charts -o jsonpath='{.data.username}' | base64 -d)"
+        password: "$(kubectl get secret -n argocd repo-charts -o jsonpath='{.data.password}' | base64 -d)"
+      chart: bootstrap-configs
+      createNamespace: false
+      releaseName: bootstrap-configs
+      version: 0.3.1
+      namespace: kube-system
+      values: |-
+        customDnsIp: "$(kubectl get -n kube-system cm custom-dns -o jsonpath='{.data.PDNS_RECURSOR_IP}')"
+        customDnsLog: false
+        {{- if .Values.kubeadm.disableKubeProxy }}
+        kubeApiServerLoadBalancerIp: "$(HOSTIP="" && while [[ -z "$HOSTIP" ]]; \
+          do HOSTIP=$(kubectl get HetznerCluster -n {{ include "cluster-name" . }} {{ include "cluster-name" . }} -o yaml \
+            | awk '/^\s*host:/ {print $2}'); sleep 5; \
+          done && echo $HOSTIP)"
+        {{- end }}
+        unbyteMgtIngressNginxLbIp: "$(kubectl get secret -n kube-system unbyte-mgt-ingress-nginx-lb-ip -o jsonpath='{.data.ip}' | base64 -d)"
+    # Install External Secrets Operator
+    42-external-secrets:
+      enabled: true
+      # secretsCount: 5
+      repoUrl: https://charts.external-secrets.io
+      chart: external-secrets
+      createNamespace: true
+      releaseName: external-secrets
+      version: 0.18.2
+      namespace: external-secrets
+      values: ""
+    # Install a vault provider. Note that here we get `AppRole` credentials and vault CA cert initially from `capi-mgt` cluster.
+    43-eso-providers:
+      enabled: true
+      repoUrl: https://gitlab.com/api/v4/projects/65336103/packages/helm/stable
+      repoCreds:
+        username: "$(kubectl get secret -n argocd repo-charts -o jsonpath='{.data.username}' | base64 -d)"
+        password: "$(kubectl get secret -n argocd repo-charts -o jsonpath='{.data.password}' | base64 -d)"
+      chart: eso-providers
+      createNamespace: false
+      releaseName: eso-providers
+      version: 1.4.0
+      namespace: eso-providers
+      # yamllint disable rule:line-length
+      values: |-
+        # This will also create a Secret to store this credentials.
+        # This is needed only initially, later it will be updated by the external-secrets.
+        authSecret:
+          ESO_VAULT_ROLE_ID: "$(kubectl get -n {{ include "cluster-name" . }} secret {{ include "cluster-name" . }}-vault-approle -o jsonpath='{.data.ESO_VAULT_ROLE_ID}')"
+          ESO_VAULT_SECRET_ID: "$(kubectl get -n {{ include "cluster-name" . }} secret {{ include "cluster-name" . }}-vault-approle -o jsonpath='{.data.ESO_VAULT_SECRET_ID}')"
+        vault:
+          providers:
+            vault:
+              name: vault
+              server: "https://vault.mgt.unbyte.internal"
+              # Path is the mount path of the Vault KV backend endpoint.
+              # Remove the mount, so we can set it explicitly in the external-secrets with multiple mounts
+              # path: "kv"
+              # path: "kv-{{ include "cluster-name" . }}"
+              # This will also create a Secret to store CA cert.
+              # This is needed only initially, later it will be updated by the external-secrets.
+              mtls:
+                caCrt: "$(kubectl get -n external-secrets secret unbyte-mgt-vault-client-cert -o jsonpath='{.data.ca\.crt}')"
+                tlsCrt: "$(kubectl get -n external-secrets secret unbyte-mgt-vault-client-cert -o jsonpath='{.data.tls\.crt}')"
+                tlsKey: "$(kubectl get -n external-secrets secret unbyte-mgt-vault-client-cert -o jsonpath='{.data.tls\.key}')"
+              # The provider for the CA bundle to use to validate Vault server certificate
+              caProvider:
+                type: Secret
+                namespace: external-secrets
+                name: vault-client-cert
+                key: ca.crt
+              tls:
+                certSecretRef:
+                  key: tls.crt
+                  name: vault-client-cert
+                  namespace: external-secrets
+                keySecretRef:
+                  key: tls.key
+                  name: vault-client-cert
+                  namespace: external-secrets
+              auth:
+                # VaultAppRole authenticates with Vault using the
+                # App Role auth mechanism
+                # https://www.vaultproject.io/docs/auth/approle
+                appRole:
+                  # Path where the App Role authentication backend is mounted
+                  path: "approle"
+                  # Reference to a key in a K8 Secret that contains the App Role RoleId
+                  roleRef:
+                    name: "vault-approle"
+                    key: "ESO_VAULT_ROLE_ID"
+                    namespace: external-secrets
+                  # Reference to a key in a K8 Secret that contains the App Role SecretId
+                  secretRef:
+                    name: "vault-approle"
+                    key: "ESO_VAULT_SECRET_ID"
+                    namespace: external-secrets
+      # yamllint enable rule:line-length
+    # Define initally required secrets like repo credentials for ArgoCD
+    44-eso-secrets:
+      enabled: true
+      repoUrl: https://gitlab.com/api/v4/projects/65336103/packages/helm/stable
+      repoCreds:
+        username: "$(kubectl get secret -n argocd repo-charts -o jsonpath='{.data.username}' | base64 -d)"
+        password: "$(kubectl get secret -n argocd repo-charts -o jsonpath='{.data.password}' | base64 -d)"
+      chart: eso-secrets
+      createNamespace: true
+      releaseName: eso-secrets
+      version: 0.4.0
+      namespace: eso-secrets
+      values: |-
+        externalSecrets:
+          clientCertUnbyteMgtVault:
+            metadata:
+              name: vault-client-cert
+              namespace: external-secrets
+            spec:
+              refreshInterval: 1m
+              data:
+              - remoteRef:
+                  key: kv/data/all-clusters/push-secrets/unbyte-mgt-vault-client-cert
+                  property: ca.crt
+                secretKey: ca.crt
+              - remoteRef:
+                  key: kv/data/all-clusters/push-secrets/unbyte-mgt-vault-client-cert
+                  property: tls.crt
+                secretKey: tls.crt
+              - remoteRef:
+                  key: kv/data/all-clusters/push-secrets/unbyte-mgt-vault-client-cert
+                  property: tls.key
+                secretKey: tls.key
+              target:
+                name: vault-client-cert
+          vaultAppRole:
+            metadata:
+              name: vault-approle
+              namespace: external-secrets
+            spec:
+              refreshInterval: 1m
+              data:
+              - remoteRef:
+                  key: kv-{{ include "cluster-name" . }}/data/external-secrets-approle
+                  property: role_id
+                secretKey: ESO_VAULT_ROLE_ID
+              - remoteRef:
+                  key: kv-{{ include "cluster-name" . }}/data/external-secrets-approle
+                  property: secret_id
+                secretKey: ESO_VAULT_SECRET_ID
+              target:
+                name: vault-approle
+          repoInfraServices:
+            metadata:
+              name: repo-infra-services
+              namespace: argocd
+            spec:
+              refreshInterval: 1m
+              data:
+              - remoteRef:
+                  key: kv/data/all-clusters/push-secrets/argocd/repo-infra-services
+                  property: password
+                secretKey: password
+              - remoteRef:
+                  key: kv/data/all-clusters/push-secrets/argocd/repo-infra-services
+                  property: username
+                secretKey: username
+              - remoteRef:
+                  key: kv/data/all-clusters/push-secrets/argocd/repo-infra-services
+                  property: url
+                secretKey: url
+              - remoteRef:
+                  key: kv/data/all-clusters/push-secrets/argocd/repo-infra-services
+                  property: name
+                secretKey: name
+              - remoteRef:
+                  key: kv/data/all-clusters/push-secrets/argocd/repo-infra-services
+                  property: type
+                secretKey: type
+              target:
+                name: repo-infra-services
+                template:
+                  metadata:
+                    labels:
+                      argocd.argoproj.io/secret-type: repository
+          repoCharts:
+            metadata:
+              name: repo-charts
+              namespace: argocd
+            spec:
+              refreshInterval: 1m
+              data:
+              - remoteRef:
+                  key: kv/data/all-clusters/push-secrets/argocd/repo-charts
+                  property: password
+                secretKey: password
+              - remoteRef:
+                  key: kv/data/all-clusters/push-secrets/argocd/repo-charts
+                  property: username
+                secretKey: username
+              - remoteRef:
+                  key: kv/data/all-clusters/push-secrets/argocd/repo-charts
+                  property: url
+                secretKey: url
+              - remoteRef:
+                  key: kv/data/all-clusters/push-secrets/argocd/repo-charts
+                  property: name
+                secretKey: name
+              - remoteRef:
+                  key: kv/data/all-clusters/push-secrets/argocd/repo-charts
+                  property: type
+                secretKey: type
+              target:
+                name: repo-charts
+                template:
+                  metadata:
+                    labels:
+                      argocd.argoproj.io/secret-type: repository
+    45-argocd:
+      enabled: true
+      # secretsCount: 6
+      repoUrl: https://argoproj.github.io/argo-helm
+      chart: argo-cd
+      createNamespace: true
+      releaseName: argocd
+      version: 8.6.1
+      namespace: argocd
+      values: |-
+        crds:
+          install: true
+        configs:
+          clusterCredentials:
+            {{ include "cluster-name" . }}:
+              server: https://kubernetes.default.svc
+              config:
+                tlsClientConfig:
+                  insecure: false
+          params:
+            applicationsetcontroller.enable.new.git.file.globbing: true
+            applicationsetcontroller.enable.policy.override: true
+        dex:
+          enabled: false
+    # To deploy everything else. Here we only define `baseline` application, which will deploy all others.
+    50-argocd-apps:
+      enabled: true
+      repoUrl: https://argoproj.github.io/argo-helm
+      chart: argocd-apps
+      releaseName: argocd-apps
+      version: 2.0.2
+      namespace: argocd
+      # yamllint disable rule:line-length
+      values: |-
+        applications:
+          baseline:
+            namespace: argocd
+            finalizers:
+            - argocd.argoproj.io/resources-finalizer
+            project: default
+            sources:
+            - repoURL: https://argoproj.github.io/argo-helm
+              targetRevision: 2.0.2
+              chart: argocd-apps
+              helm:
+                releaseName: argocd-apps
+                valueFiles:
+                # Here we have to escape this dollar sign, otherwise it is rendered by bash in ClusterResourceSet job script.
+                - \$configvalues/{{ .Values.install.orgName }}/{{ .Values.install.envName }}/{{ include "cluster-name" . }}/baseline/argocd-apps/config.yaml
+            - repoURL: https://gitlab.com/unbytede/unbyte-orbit/infra-services.git
+              targetRevision: HEAD
+              ref: configvalues
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: argocd
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
+              retry:
+                backoff:
+                  duration: 5s
+                  factor: 2
+                  maxDuration: 3m
+                limit: 5
+              syncOptions:
+              - Validate=true
+              - CreateNamespace=true
+              - PrunePropagationPolicy=foreground
+              - PruneLast=true
+            info:
+            - name: "Baseline > Argo CD Apps:"
+              value: https://gitlab.com/unbytede/unbyte-orbit/infra-services/-/tree/main/{{ .Values.install.orgName }}/{{ .Values.install.envName }}/{{ include "cluster-name" . }}/baseline/argocd-apps
+      # yamllint enable rule:line-length
