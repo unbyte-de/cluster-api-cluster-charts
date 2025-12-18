@@ -38,10 +38,7 @@ spec:
     {{- end }}
     port: {{ $networking.apiPort }}
   controlPlaneRef:
-    {{- if eq .Values.capi.providers.controlPlane.name "talos" }}
-    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
-    kind: TalosControlPlane
-    {{- else if eq .Values.capi.providers.controlPlane.name "kubeadm" }}
+    {{- if eq .Values.capi.providers.controlPlane.name "kubeadm" }}
     apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     kind: KubeadmControlPlane
     {{- end }}
@@ -126,7 +123,7 @@ spec:
       hcloudToken: {{ .Values.hCloud.token.secretKey }}
       hetznerRobotPassword: robot-password
       hetznerRobotUser: robot-user
-  {{- if and (ne .Values.capi.providers.controlPlane.name "talos") .Values.hCloud.sshKeys }}
+  {{- if .Values.hCloud.sshKeys }}
   sshKeys:
     hcloud:
     {{- range .Values.hCloud.sshKeys }}

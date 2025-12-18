@@ -13,18 +13,6 @@ exports:
           name: kubeadm
         infrastructure:
           name: hetzner
-        # # https://github.com/siderolabs/cluster-api-control-plane-provider-talos?tab=readme-ov-file#creating-your-own-templates
-        # # Creates CP nodes and bootstraps them with Talos
-        # controlPlane:
-        #   name: talos
-        # # https://www.talos.dev/v1.8/reference/configuration/v1alpha1/config/
-        # # https://github.com/siderolabs/cluster-api-bootstrap-provider-talos?tab=readme-ov-file#usage
-        # # CABPT is not used directly, but rather via CACPPT (TalosControlPlane) for control plane nodes or
-        # # via MachineDeployment (MachinePool) for worker nodes.
-        # # https://doc.crds.dev/github.com/kubernetes-sigs/cluster-api/cluster.x-k8s.io/MachineDeployment/v1beta1@v1.8.5
-        # # MachineDeployment creates worker nodes via TalosConfigTemplate
-        # bootstrap:
-        #   name: talos
 
     cluster:
       # Default is the release name.
@@ -66,7 +54,7 @@ exports:
           nodeStartupTimeout: 15m0s
           # Conditions to check on Nodes for matched Machines, if any condition is matched for the duration of its timeout,
           # the Machine is considered unhealthy.
-          # `k get -n mgt-cluster Machine capi-talos-XYZ -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'`
+          # `k get -n mgt-cluster Machine <name> -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'`
           unhealthyConditions:
           - type: Ready
             status: Unknown
@@ -139,17 +127,11 @@ exports:
           name: ""
           ip: ""
           # extraServices:
-          # # Talos API
-          # # https://www.talos.dev/v1.8/introduction/getting-started/#accessing-the-talos-api
-          # # https://www.talos.dev/v1.8/introduction/prodnotes/#load-balancing-the-talos-api
           # - destinationPort: 50000
           #   listenPort: 50000
           #   protocol: tcp
         new:
           # extraServices:
-          # # Talos API
-          # # https://www.talos.dev/v1.8/introduction/getting-started/#accessing-the-talos-api
-          # # https://www.talos.dev/v1.8/introduction/prodnotes/#load-balancing-the-talos-api
           # - destinationPort: 50000
           #   listenPort: 50000
           #   protocol: tcp
@@ -286,35 +268,6 @@ exports:
       #   extraFiles:
         extraCommandsCp: ""
         extraCommandsWorker: ""
-
-    talos:
-      etcd:
-        version: "v3.5.16"
-        electionTimeout: 5000
-      machine:
-        # https://www.talos.dev/v1.8/talos-guides/configuration/pull-through-cache/#using-harbor-as-a-caching-registry
-        registries:
-          mirrors:
-            # registry.k8s.io:
-            #   endpoints:
-            #   -
-            #   overridePath: true
-            # docker.io:
-            #   endpoints:
-            #   -
-            #   overridePath: true
-            # ghcr.io:
-            #   endpoints:
-            #   -
-            #   overridePath: true
-            # gcr.io:
-            #   endpoints:
-            #   -
-            #   overridePath: true
-            # quay.io:
-            #   endpoints:
-            #   -
-            #   overridePath: true
 
     # Here we define initial resources which are applied by CAPI (ClusterResourceset) just after cluster creation.
     # Install Cilium, HCCM and TCCM in workload cluster using ClusterResourceSet.
@@ -454,14 +407,3 @@ exports:
               {{- else }}
               enabled: false
               {{- end }}
-        30-tccm:
-          enabled: false
-          repoUrl: oci://ghcr.io/siderolabs/charts/talos-cloud-controller-manager
-          releaseName: tccm
-          version: 0.4.4
-          namespace: kube-system
-          createNamespace: false
-          secretsCount: 1
-          values: |-
-            daemonSet:
-              enabled: true

@@ -258,14 +258,14 @@ files:
   {{- fail "Please set which CAPI infrastructure provider to use. Supported providers: 'hetzner'." }}
 {{- end }}
 
-{{- if or (eq .Values.capi.providers.controlPlane.name "talos") (eq .Values.capi.providers.controlPlane.name "kubeadm") }}
+{{- if eq .Values.capi.providers.controlPlane.name "kubeadm" }}
 {{ else }}
-{{- fail "Please set which CAPI CP provider to use. Supported providers: 'kubeadm', 'talos'." }}
+{{- fail "Please set which CAPI CP provider to use. Supported providers: 'kubeadm'." }}
 {{- end }}
 
-{{- if or (eq .Values.capi.providers.bootstrap.name "talos") (eq .Values.capi.providers.bootstrap.name "kubeadm") }}
+{{- if eq .Values.capi.providers.controlPlane.name "kubeadm" }}
 {{ else }}
-{{- fail "Please set which CAPI bootstrap provider to use. Supported providers: 'kubeadm', 'talos'." }}
+{{- fail "Please set which CAPI bootstrap provider to use. Supported providers: 'kubeadm'." }}
 {{- end }}
 
 {{/* Trim a version like "v1.31.4" to "v1.31" */}}
