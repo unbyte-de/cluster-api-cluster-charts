@@ -9,8 +9,3 @@ Bootstrap provider: "{{ .Values.capi.providers.bootstrap.name }}"
 
 Command to get kubeconfig:
 kubectl get secret -n {{ .Release.Namespace }} {{ include "cluster-name" . }}-kubeconfig -o jsonpath='{.data.value}' | base64 -d
-
-{{ if and (eq .Values.capi.providers.controlPlane.name "talos") (eq .Values.capi.providers.bootstrap.name "talos") -}}
-Command to get talosconfig:
-kubectl get secret -n {{ .Release.Namespace }} {{ include "cluster-name" . }}-talosconfig -o jsonpath='{.data.talosconfig}' | base64 -d
-{{- end }}
