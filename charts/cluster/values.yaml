@@ -269,8 +269,8 @@ exports:
         extraCommandsCp: ""
         extraCommandsWorker: ""
 
-    # Here we define initial resources which are applied by CAPI (ClusterResourceset) just after cluster creation.
-    # Install Cilium, HCCM and TCCM in workload cluster using ClusterResourceSet.
+    # Here we define initial resources which are applied by CAPI (using ClusterResourceSet) just after cluster creation.
+    # It installs cilium and hcloud-cloud-controller-manager in the workload cluster.
     # This creates a Job that renders helm templates for the resources and then creates a secret for each resource,
     # which are then applied in workload cluster by the ClusterResourceSet controller.
     # Note: Set `install.enabled` to `false` after first install, so secrets are cleaned up.
@@ -296,6 +296,7 @@ exports:
       resources:
         10-cilium:
           enabled: true
+          strategy: ApplyOnce
           repoUrl: https://helm.cilium.io/
           # repoCreds:
           #   username: ""
@@ -380,6 +381,7 @@ exports:
             policyEnforcementMode: always
         20-hccm:
           enabled: true
+          strategy: ApplyOnce
           repoUrl: https://charts.hetzner.cloud
           chart: hcloud-cloud-controller-manager
           releaseName: hccm

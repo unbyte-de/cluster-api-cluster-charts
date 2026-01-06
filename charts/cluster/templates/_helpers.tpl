@@ -274,3 +274,24 @@ files:
 {{- $v := $machines.cp.k8sVersion | splitList "." -}}
 {{- printf "%s.%s" (index $v 0) (index $v 1) -}}
 {{- end -}}
+
+{{/* Check if there is any resource with strategy "ApplyOnce". Used in _cluster-resource-set.yaml */}}
+{{- define "hasApplyOnce" -}}
+{{- $found := false -}}
+{{- range $k, $v := . -}}
+  {{- if eq (default "" $v.strategy) "ApplyOnce" }}
+    {{- $found = true -}}
+  {{- end -}}
+{{- end -}}
+{{- $found -}}
+{{- end -}}
+{{/* Check if there is any resource with strategy "Reconcile". Used in _cluster-resource-set.yaml */}}
+{{- define "hasReconcile" -}}
+{{- $found := false -}}
+{{- range $k, $v := . -}}
+  {{- if eq (default "" $v.strategy) "Reconcile" }}
+    {{- $found = true -}}
+  {{- end -}}
+{{- end -}}
+{{- $found -}}
+{{- end -}}
