@@ -264,6 +264,8 @@ exports:
         # https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/.
         defaultNotReadyTolerationSeconds: "300"
         defaultUnreachableTolerationSeconds: "300"
+      # Setting this to <cluster-name>.k8s or <cluster-name>.cluster.local would be useful when using cilium clustermesh global services.
+      clusterDnsDomain: ""  # Defaults to "cluster.local"
       postKubeadm:
       #   extraFiles:
         extraCommandsCp: ""

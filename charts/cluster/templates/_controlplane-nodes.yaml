@@ -223,9 +223,10 @@ spec:
           kubeconfig: /etc/kubernetes/scheduler.conf
           profiling: "false"
           secure-port: "10259"
-      # networking:
-      #   TODO change this to <cluster-name>.k8s or <cluster-name>.cluster.local
-      #   dnsDomain: "cluster.local"
+      {{- with .Values.kubeadm.clusterDnsDomain }}
+      networking:
+        dnsDomain: {{ . | quote }}
+      {{- end }}
     {{- /*
     List of commands to be executed before/after kubeadm init/join
     */}}
