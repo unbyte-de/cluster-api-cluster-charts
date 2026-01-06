@@ -260,10 +260,10 @@ files:
 
 {{- if eq .Values.capi.providers.controlPlane.name "kubeadm" }}
 {{ else }}
-{{- fail "Please set which CAPI CP provider to use. Supported providers: 'kubeadm'." }}
+{{- fail "Please set which CAPI controlPlane provider to use. Supported providers: 'kubeadm'." }}
 {{- end }}
 
-{{- if eq .Values.capi.providers.controlPlane.name "kubeadm" }}
+{{- if eq .Values.capi.providers.bootstrap.name "kubeadm" }}
 {{ else }}
 {{- fail "Please set which CAPI bootstrap provider to use. Supported providers: 'kubeadm'." }}
 {{- end }}
