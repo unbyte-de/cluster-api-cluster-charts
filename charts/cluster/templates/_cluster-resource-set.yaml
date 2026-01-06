@@ -1,5 +1,6 @@
 {{- define "cluster.cluster-resource-set" -}}
 {{- if eq .Values.install.enabled true -}}
+{{- if or (eq .Values.install.strategy "ApplyOnce") (eq (include "hasApplyOnce" .Values.install.resources) "true") }}
 ---
 apiVersion: addons.cluster.x-k8s.io/v1beta1
 kind: ClusterResourceSet
@@ -9,7 +10,7 @@ metadata:
   labels:
     {{- include "cluster.labels" . | nindent 4 }}
 spec:
-  strategy: {{ .Values.install.strategy }}
+  strategy: ApplyOnce
   clusterSelector:
     matchLabels:
       name: {{ include "cluster-name" . }}
@@ -28,6 +29,8 @@ spec:
   {{- end }}
   {{- end }}
   {{- end }}
+{{- end }}
+{{- if or (eq .Values.install.strategy "Reconcile") (eq (include "hasReconcile" .Values.install.resources) "true") }}
 ---
 apiVersion: addons.cluster.x-k8s.io/v1beta1
 kind: ClusterResourceSet
@@ -56,6 +59,7 @@ spec:
   {{- end }}
   {{- end }}
   {{- end }}
+{{- end }}
 ---
 apiVersion: v1
 kind: Secret
