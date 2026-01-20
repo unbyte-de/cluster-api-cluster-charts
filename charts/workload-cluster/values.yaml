@@ -68,6 +68,11 @@ kubeadm:
   disableKubeProxy: true
   setKubeletNodeIp: true
   kubeApiServer:
+    # # Increased default toleration times for NotReady and Unreachable states.
+    # # So that brief network blips, control-plane upgrades, or AZ hiccups won’t trigger mass pod evictions.
+    # # That reduces restart storms and downstream throttling (DB reconnects, cache cold starts, etc.).
+    # defaultNotReadyTolerationSeconds: "600"
+    # defaultUnreachableTolerationSeconds: "600"
     oidc:
       enabled: true
       clientId: kubectl-oidc-{{ include "cluster-name" . }}
@@ -75,11 +80,6 @@ kubeadm:
       # Since our issuer uses letsencrypt cert, we don't need to set the ca cert
       caFile: ""
       useExistingSecretForCa: false
-    # # Increased default toleration times for NotReady and Unreachable states.
-    # # So that brief network blips, control-plane upgrades, or AZ hiccups won’t trigger mass pod evictions.
-    # # That reduces restart storms and downstream throttling (DB reconnects, cache cold starts, etc.).
-    # defaultNotReadyTolerationSeconds: "600"
-    # defaultUnreachableTolerationSeconds: "600"
   postKubeadm:
     extraCommandsCp: |-
       kubectl rollout restart -n argocd deployment.apps/argocd-applicationset-controller deployment.apps/argocd-repo-server deployment.apps/argocd-server statefulset.apps/argocd-application-controller || true
@@ -107,10 +107,15 @@ install:
       name: {{ include "cluster-name" . }}-install-2
       namespace: {{ .Release.Namespace }}
     rules:
-    - apiGroups: [""]
-      resources: ["secrets"]
-      verbs: ["get", "list"]
-      resourceNames: ['{{ include "cluster-name" . }}-vault-approle']
+    - apiGroups:
+      - ""
+      resources:
+      - "secrets"
+      verbs:
+      - "get"
+      - "list"
+      resourceNames:
+      - "{{ include "cluster-name" . }}-vault-approle"
     ---
     apiVersion: rbac.authorization.k8s.io/v1
     kind: RoleBinding
@@ -132,10 +137,15 @@ install:
       name: {{ include "cluster-name" . }}-install
       namespace: external-secrets
     rules:
-    - apiGroups: [""]
-      resources: ["secrets"]
-      verbs: ["get", "list"]
-      resourceNames: ['unbyte-mgt-vault-client-cert']
+    - apiGroups:
+      - ""
+      resources:
+      - "secrets"
+      verbs:
+      - "get"
+      - "list"
+      resourceNames:
+      - "unbyte-mgt-vault-client-cert"
     ---
     apiVersion: rbac.authorization.k8s.io/v1
     kind: RoleBinding
@@ -157,14 +167,24 @@ install:
       name: {{ include "cluster-name" . }}-install
       namespace: kube-system
     rules:
-    - apiGroups: [""]
-      resources: ["configmaps"]
-      verbs: ["get", "list"]
-      resourceNames: ["custom-dns"]
-    - apiGroups: [""]
-      resources: ["secrets"]
-      verbs: ["get", "list"]
-      resourceNames: ["unbyte-mgt-ingress-nginx-lb-ip"]
+    - apiGroups:
+      - ""
+      resources:
+      - "configmaps"
+      verbs:
+      - "get"
+      - "list"
+      resourceNames:
+      - "custom-dns"
+    - apiGroups:
+      - ""
+      resources:
+      - "secrets"
+      verbs:
+      - "get"
+      - "list"
+      resourceNames:
+      - "unbyte-mgt-ingress-nginx-lb-ip"
     ---
     apiVersion: rbac.authorization.k8s.io/v1
     kind: RoleBinding
@@ -186,10 +206,15 @@ install:
       name: {{ include "cluster-name" . }}-install
       namespace: argocd
     rules:
-    - apiGroups: [""]
-      resources: ["secrets"]
-      verbs: ["get", "list"]
-      resourceNames: ["repo-charts"]
+    - apiGroups:
+      - ""
+      resources:
+      - "secrets"
+      verbs:
+      - "get"
+      - "list"
+      resourceNames:
+      - "repo-charts"
     ---
     apiVersion: rbac.authorization.k8s.io/v1
     kind: RoleBinding
@@ -212,10 +237,15 @@ install:
       name: {{ include "cluster-name" . }}-install-3
       namespace: {{ .Release.Namespace }}
     rules:
-    - apiGroups: ["infrastructure.cluster.x-k8s.io"]
-      resources: ["hetznerclusters"]
-      verbs: ["get", "list"]
-      resourceNames: ["{{ include "cluster-name" . }}"]
+    - apiGroups:
+      - "infrastructure.cluster.x-k8s.io"
+      resources:
+      - "hetznerclusters"
+      verbs:
+      - "get"
+      - "list"
+      resourceNames:
+      - "{{ include "cluster-name" . }}"
     ---
     apiVersion: rbac.authorization.k8s.io/v1
     kind: RoleBinding

@@ -131,14 +131,14 @@ exports:
           #   listenPort: 50000
           #   protocol: tcp
         new:
-          # extraServices:
-          # - destinationPort: 50000
-          #   listenPort: 50000
-          #   protocol: tcp
-          # algorithm: round_robin
-          # port: "6443"
-          # region: ""
-          # type: lb11
+        #   extraServices:
+        #   - destinationPort: 50000
+        #     listenPort: 50000
+        #     protocol: tcp
+        #   algorithm: round_robin
+        #   port: "6443"
+        #   region: ""
+        #   type: lb11
       machines:
         # List of placement groups that should be defined in Hetzner API
         # https://docs.hetzner.com/cloud/placement-groups/overview
@@ -267,7 +267,7 @@ exports:
       # Setting this to <cluster-name>.k8s or <cluster-name>.cluster.local would be useful when using cilium clustermesh global services.
       clusterDnsDomain: ""  # Defaults to "cluster.local"
       postKubeadm:
-      #   extraFiles:
+        # extraFiles:
         extraCommandsCp: ""
         extraCommandsWorker: ""
 

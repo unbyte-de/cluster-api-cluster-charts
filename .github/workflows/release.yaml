@@ -1,11 +1,12 @@
+---
 name: Release Charts
 
 on:
   push:
     branches:
-      - main
+    - main
     paths:
-      - 'charts/*/Chart.yaml'
+    - "charts/*/Chart.yaml"
   workflow_dispatch:
 
 permissions:
@@ -16,70 +17,72 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    # https://github.com/actions/checkout
+    - name: Checkout
+      uses: actions/checkout@v6.0.1
+      with:
+        fetch-depth: 0
 
-      - name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+    - name: Configure Git
+      run: |
+        git config user.name "$GITHUB_ACTOR"
+        git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: 'latest'
+    # https://github.com/Azure/setup-helm
+    - name: Set up Helm
+      uses: azure/setup-helm@v4.3.1
+      with:
+        version: "latest"
 
-      - name: Log in to GitHub Container Registry
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+    - name: Log in to GitHub Container Registry
+      run: |
+        echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Package and Push Charts
-        run: |
-          # Get repository owner in lowercase
-          REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+    - name: Package and Push Charts
+      run: |
+        # Get repository owner in lowercase
+        REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
 
-          # Track if any charts were released
-          RELEASED=false
-          SKIPPED=false
+        # Track if any charts were released
+        RELEASED=false
+        SKIPPED=false
 
-          for chart in charts/*; do
-            if [ -d "$chart" ] && [ -f "$chart/Chart.yaml" ]; then
-              chart_name=$(basename "$chart")
-              chart_version=$(grep '^version:' "$chart/Chart.yaml" | awk '{print $2}')
+        for chart in charts/*; do
+          if [ -d "$chart" ] && [ -f "$chart/Chart.yaml" ]; then
+            chart_name=$(basename "$chart")
+            chart_version=$(grep '^version:' "$chart/Chart.yaml" | awk '{print $2}')
 
-              echo "Processing $chart_name version $chart_version"
+            echo "Processing $chart_name version $chart_version"
 
-              # Check if this version already exists
-              if helm pull "oci://ghcr.io/${REPO_OWNER}/charts/${chart_name}" --version "${chart_version}" 2>/dev/null; then
-                echo "⏭️  Skipping ${chart_name}:${chart_version} - already exists in registry"
-                rm -f "${chart_name}-${chart_version}.tgz"
-                SKIPPED=true
-                continue
-              fi
-
-              # Update dependencies
-              helm dependency update "$chart"
-
-              # Package the chart
-              helm package "$chart"
-
-              # Push to GHCR
-              if helm push "${chart_name}-${chart_version}.tgz" "oci://ghcr.io/${REPO_OWNER}/charts"; then
-                echo "✅ Successfully released $chart_name:$chart_version"
-                RELEASED=true
-              else
-                echo "❌ Failed to release $chart_name:$chart_version"
-                exit 1
-              fi
+            # Check if this version already exists
+            if helm pull "oci://ghcr.io/${REPO_OWNER}/charts/${chart_name}" --version "${chart_version}" 2>/dev/null; then
+              echo "⏭️  Skipping ${chart_name}:${chart_version} - already exists in registry"
+              rm -f "${chart_name}-${chart_version}.tgz"
+              SKIPPED=true
+              continue
             fi
-          done
 
-          if [ "$RELEASED" = false ] && [ "$SKIPPED" = true ]; then
-            echo "ℹ️  All chart versions already exist in registry. No new releases."
+            # Update dependencies
+            helm dependency update "$chart"
+
+            # Package the chart
+            helm package "$chart"
+
+            # Push to GHCR
+            if helm push "${chart_name}-${chart_version}.tgz" "oci://ghcr.io/${REPO_OWNER}/charts"; then
+              echo "✅ Successfully released $chart_name:$chart_version"
+              RELEASED=true
+            else
+              echo "❌ Failed to release $chart_name:$chart_version"
+              exit 1
+            fi
           fi
+        done
 
-      - name: Logout from GHCR
-        if: always()
-        run: helm registry logout ghcr.io
+        if [ "$RELEASED" = false ] && [ "$SKIPPED" = true ]; then
+          echo "ℹ️  All chart versions already exist in registry. No new releases."
+        fi
+
+    - name: Logout from GHCR
+      if: always()
+      run: helm registry logout ghcr.io

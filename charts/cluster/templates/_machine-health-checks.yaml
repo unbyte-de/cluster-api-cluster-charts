@@ -67,10 +67,10 @@ kind: MachineHealthCheck
 metadata:
   name: {{ include "cluster-name" . }}-worker-unhealthy
   namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "cluster.labels" . | nindent 4 }}
   # annotations:
   #   argocd.argoproj.io/sync-wave: ""
+  labels:
+    {{- include "cluster.labels" . | nindent 4 }}
 spec:
   clusterName: {{ include "cluster-name" . }}
   maxUnhealthy: {{ $machines.worker.healthCheck.maxUnhealthy }}

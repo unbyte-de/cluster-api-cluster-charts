@@ -92,9 +92,13 @@ stringData:
     {{- end }}
     {{- if not $v.onlyNamespace }}
 
+    {{- if $v.values }}
     cat >values_{{ $k }}.yaml <<EOL
     {{- (tpl $v.values $) | nindent 4 }}
     EOL
+    {{- else }}
+    echo "---" > values_{{ $k }}.yaml
+    {{- end }}
 
     {{- if $v.chart }}
     {{- if $v.repoCreds }}
@@ -178,7 +182,9 @@ spec:
       containers:
       - name: install
         image: {{ $.Values.install.jobImage }}
-        command: ["/bin/bash", "/scripts/render.sh"]
+        command:
+        - "/bin/bash"
+        - "/scripts/render.sh"
         resources:
           requests:
             memory: "128Mi"
@@ -259,7 +265,8 @@ spec:
       containers:
       - name: cleanup
         image: {{ $.Values.install.jobImage }}
-        command: ["/bin/bash"]
+        command:
+        - "/bin/bash"
         args:
         - "-c"
         - |
@@ -307,8 +314,10 @@ metadata:
   name: {{ include "cluster-name" . }}-install
   namespace: {{ .Release.Namespace }}
 rules:
-- apiGroups: [""]
-  resources: ["secrets"]
+- apiGroups:
+  - ""
+  resources:
+  - "secrets"
   verbs:
 {{- if eq .Values.install.enabled true }}
   - "get"
