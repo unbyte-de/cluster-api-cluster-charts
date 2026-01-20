@@ -87,7 +87,6 @@ spec:
           default-unreachable-toleration-seconds: {{ .Values.kubeadm.kubeApiServer.defaultUnreachableTolerationSeconds | quote }}
           enable-aggregator-routing: "true"
           {{- /*
-          # TODO not sure about this.
           {{- if .Values.kubeadm.kubeApiServer.disablePublicAccessClusterInfoConfigMap }}
           enable-bootstrap-token-auth: "false"
           {{- else }}
@@ -267,7 +266,6 @@ spec:
     - path: /etc/kubernetes/postKubeadmCommands.sh
       owner: root:root
       permissions: "0700"
-      # yamllint disable rule:line-length
       content: |-
         #!/usr/bin/env bash
         set -eu
@@ -310,7 +308,6 @@ spec:
           )
         ' -i /etc/kubernetes/manifests/kube-apiserver.yaml
         {{- /*
-        # TODO not sure about this.
         {{- else if .Values.kubeadm.kubeApiServer.disablePublicAccessClusterInfoConfigMap }}
         kubectl -n kube-public delete rolebinding kubeadm:bootstrap-signer-clusterinfo --ignore-not-found
         */}}
@@ -344,7 +341,6 @@ spec:
         {{- tpl . $ | nindent 8 }}
         {{- end }}
         echo "Done!"
-      # yamllint enable rule:line-length
     {{- if .Values.kubeadm.kubeApiServer.disableAnonymousAuth }}
     - path: /etc/kubernetes/kube-apiserver-healthcheck-token.yaml
       owner: root:root
@@ -572,7 +568,6 @@ spec:
       discovery:
         file:
           kubeConfig:
-            # TODO how to set this?
             user:
               # exec:
               #   apiVersion: client.authentication.k8s.io/v1

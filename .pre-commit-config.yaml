@@ -5,8 +5,20 @@ repos:
   hooks:
   - id: editorconfig-checker
     args: [--exclude=LICENSE]
-- repo: https://github.com/adrienverge/yamllint.git
-  rev: v1.37.1
+# - repo: https://github.com/adrienverge/yamllint.git
+#   rev: v1.37.1
+#   hooks:
+#   - id: yamllint
+#     args:
+#     - -c=./.yamllint
+# https://github.com/google/yamlfmt/blob/main/docs/pre-commit.md
+- repo: https://github.com/google/yamlfmt.git
+  rev: v0.20.0
   hooks:
-  - id: yamllint
-    args: [-c=./.yamllint]
+  - id: yamlfmt
+    # In pre-commit we run yamlfmt in "lint" mode.
+    # If you want to format the files, run `yamlfmt .` manually.
+    args:
+    - -lint
+    - -quiet
+    - -conf=./.yamlfmt
