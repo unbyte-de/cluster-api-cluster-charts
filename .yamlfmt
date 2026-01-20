@@ -2,7 +2,7 @@
 # yamlfmt configuration file
 # https://github.com/google/yamlfmt
 # https://github.com/google/yamlfmt/blob/main/docs/config-file.md#command
-doublestar: false
+doublestar: true
 continue_on_error: false
 gitignore_excludes: true
 match_type: doublestar
