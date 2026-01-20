@@ -10,6 +10,9 @@ hCloud:
   token:
     existingSecret: true
     move: false
+  networking:
+    # region must be defined per cluster.
+    region: ""  # e.g. "fsn1" or "nbg1"
   # This is required to be set for each unbyte cluster.
   # networking:
   #   servicesIpv4Cidr: "10.3.8.0/21"
@@ -26,27 +29,33 @@ hCloud:
       type: lb11
   machines:
     cp:
+      type: "cpx32"
       osVersion: "2404"
       k8sVersion: "v1.31.4"
-      buildTimestamp: "1744739363"
+      # buildTimestamp depends on hcloud project. Define it per cluster.
+      buildTimestamp: ""
       imageName: >-
         {{- $machines := (include "machines" $) | fromYaml -}}
-        cluster-api-ubuntu-{{ $machines.cp.osVersion }}-{{ $machines.cp.k8sVersion }}-{{ $machines.cp.buildTimestamp }}
+        cluster-api-ubuntu-{{ $machines.cp.osVersion }}-{{ $machines.cp.k8sVersion }}-{{ $machines.cp.buildTimestamp | required "ERROR: CP image buildTimestamp is required." }}
       replicas: 3
       remediation:
         enabled: true
     worker:
+      type: "cpx32"
       osVersion: "2404"
       k8sVersion: "v1.31.4"
-      buildTimestamp: "1744739363"
+      # buildTimestamp depends on hcloud project. Define it per cluster.
+      buildTimestamp: ""
       imageName: >-
         {{- $machines := (include "machines" $) | fromYaml -}}
-        cluster-api-ubuntu-{{ $machines.worker.osVersion }}-{{ $machines.worker.k8sVersion }}-{{ $machines.worker.buildTimestamp }}
+        cluster-api-ubuntu-{{ $machines.worker.osVersion }}-{{ $machines.worker.k8sVersion }}-{{ $machines.worker.buildTimestamp | required "ERROR: worker image buildTimestamp is required." }}
+      # This replicas must be ignored by ArgoCD. It is controlled by cluster autoscaler.
+      # replicas is in effect only until autoscaler is active, e.g. during bootstrap of the cluster.
       replicas: 3
       autoscaler:
         enabled: true
         minSize: "3"
-        maxSize: "5"
+        maxSize: "4"
       remediation:
         enabled: true
 
@@ -274,7 +283,7 @@ install:
       chart: bootstrap-configs
       createNamespace: false
       releaseName: bootstrap-configs
-      version: 0.3.1
+      version: 0.3.2
       namespace: kube-system
       values: |-
         customDnsIp: "$(kubectl get -n kube-system cm custom-dns -o jsonpath='{.data.PDNS_RECURSOR_IP}')"

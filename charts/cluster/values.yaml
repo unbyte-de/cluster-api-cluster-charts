@@ -27,12 +27,11 @@ exports:
 
     machines:
       cp:
-        osVersion: "2404"
-        k8sVersion: "v1.31.4"
-        buildTimestamp: ""
-        imageName: >-
-          {{- $machines := (include "machines" $) | fromYaml -}}
-          cluster-api-ubuntu-{{ $machines.cp.osVersion }}-{{ $machines.cp.k8sVersion }}-{{ $machines.cp.buildTimestamp }}
+        osVersion: ""  # e.g. "2404"
+        k8sVersion: ""  # e.g. "v1.31.4"
+        # TODO set this in workload cluster
+        # k8sVersion: "v1.31.4"
+        imageName: ""
         replicas: 3
         # https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/healthchecking
         # https://doc.crds.dev/github.com/kubernetes-sigs/cluster-api/cluster.x-k8s.io/MachineHealthCheck/v1beta1@v1.8.5
@@ -63,14 +62,16 @@ exports:
             status: "False"
             timeout: 5m0s
       worker:
-        osVersion: "2404"
-        k8sVersion: "v1.31.4"
-        buildTimestamp: ""
-        imageName: >-
-          {{- $machines := (include "machines" $) | fromYaml -}}
-          cluster-api-ubuntu-{{ $machines.worker.osVersion }}-{{ $machines.worker.k8sVersion }}-{{ $machines.worker.buildTimestamp }}
+        osVersion: ""  # e.g. "2404"
+        k8sVersion: ""  # e.g. "v1.31.4"
+        # TODO set this in workload cluster
+        # k8sVersion: "v1.31.4"
+        imageName: ""
+        # If autoscaler is enabled, replicas is in effect only until autoscaler is active, e.g. during bootstrap of the cluster.
         replicas: 3
+        # If autoscaler is enabled, replicas must be ignored by ArgoCD.
         autoscaler:
+          # Adds annotations to MachineDeployment for Kubernetes Autoscaler (https://github.com/kubernetes/autoscaler).
           enabled: false
           minSize: ""
           maxSize: ""
@@ -107,7 +108,7 @@ exports:
         hcloudNetworkEnabled: false
         # https://docs.hetzner.com/cloud/general/locations/
         # https://docs.hetzner.com/cloud/networks/faq/#can-networks-span-multiple-locations
-        region: "fsn1"
+        region: ""  # e.g. "fsn1" or "nbg1"
         # Required only private hCloud network is enabled (hcloudNetworkEnabled).
         # networkZone: eu-central
         # Considerations on the IP Ranges. Required only private hCloud network is enabled.
@@ -149,7 +150,8 @@ exports:
         - name: worker
           type: spread
         cp:
-          type: "cpx31"
+          # Server types: https://www.hetzner.com/cloud
+          type: ""  # e.g. cpx32
           placementGroupName: cp
           # https://syself.com/docs/caph/reference/hcloud-remediation-template
           remediation:
@@ -168,7 +170,8 @@ exports:
             # Type represents the type of the remediation strategy. At the moment, only "Reboot" is supported.
             type: Reboot
         worker:
-          type: "cpx31"
+          # Server types: https://www.hetzner.com/cloud
+          type: ""  # e.g. cpx42
           placementGroupName: worker
           remediation:
             # Disable HCloudRemediationTemplate and rely on default remediation
@@ -286,7 +289,9 @@ exports:
       # "ApplyOnce" mode must be used so that reconciliation on those resources can be delegated to the operator.
       # ref: https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20200220-cluster-resource-set.md#clusterresourceset-object-definition
       strategy: ApplyOnce
-      k8sVersion: "1.31.4"
+      k8sVersion: ""  # e.g. "v1.31.4"
+      # TODO set this in workload cluster
+      # k8sVersion: "v1.31.4"
       secretLabel:
         key: name
         value: cluster-resource-set-install-once

@@ -6,9 +6,29 @@ hCloud:
   networking:
     servicesIpv4Cidr: "10.3.8.0/21"
     podsIpv4Cidr: "10.3.16.0/20"
+    region: "fsn1"
+  machines:
+    cp:
+      type: "cpx32"
+      # osVersion: "2404"
+      # k8sVersion: "v1.31.4"
+      buildTimestamp: "1744781328"
+      # replicas: 3
+    worker:
+      type: "cpx42"
+      # osVersion: "2404"
+      # k8sVersion: "v1.31.4"
+      buildTimestamp: "1744781328"
+      # replicas: 3
+      replicas: 7
+      autoscaler:
+        # minSize: "3"
+        # maxSize: "4"
+        minSize: "7"
+        maxSize: "9"
 
 install:
   # enabled: false
   # # deleteAll: true
   envName: dev
-  orgName: unbyte
+  orgName: pbm  # or unbyte

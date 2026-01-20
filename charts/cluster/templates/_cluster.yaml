@@ -84,7 +84,7 @@ spec:
     enabled: true
     {{- if .Values.hCloud.lb.existing.ip }}
     name: {{ include "lb-existing-name" . }}
-    region: {{ $networking.region }}
+    region: {{ $networking.region | required "ERROR: networking region is required." }}
       {{- with .Values.hCloud.lb.existing.extraServices }}
     extraServices:
       {{- toYaml . | nindent 4 }}
@@ -101,7 +101,7 @@ spec:
       {{- end }}
     {{- end }}
   controlPlaneRegions:
-  - {{ $networking.region }}
+  - {{ $networking.region | required "ERROR: networking region is required." }}
   {{- /*
   HCloudNetwork defines details about the private Network for Hetzner Cloud.
   If left empty, no private Network is configured.

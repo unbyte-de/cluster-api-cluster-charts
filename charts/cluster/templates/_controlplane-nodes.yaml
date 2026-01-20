@@ -105,7 +105,7 @@ spec:
           kubelet-client-key: /etc/kubernetes/pki/apiserver-kubelet-client.key
           kubelet-preferred-address-types: ExternalIP,Hostname,InternalDNS,ExternalDNS
           {{- if .Values.kubeadm.kubeApiServer.oidc.enabled }}
-          oidc-issuer-url: {{ .Values.kubeadm.kubeApiServer.oidc.issuerUrl | required ".Values.kubeadm.kubeApiServer.oidc.issuerUrl is required when oidc is enabled" }}
+          oidc-issuer-url: {{ .Values.kubeadm.kubeApiServer.oidc.issuerUrl | required "ERROR: .Values.kubeadm.kubeApiServer.oidc.issuerUrl is required when oidc is enabled" }}
           oidc-client-id: {{ tpl .Values.kubeadm.kubeApiServer.oidc.clientId . | quote }}
           {{- with .Values.kubeadm.kubeApiServer.oidc.caFile }}
           {{- /*
@@ -619,7 +619,7 @@ spec:
       kind: HCloudMachineTemplate
       name: {{ include "cp-hcloud-machine-template-name" . }}
   replicas: {{ $machines.cp.replicas }}
-  version: {{ $machines.cp.k8sVersion }}
+  version: {{ $machines.cp.k8sVersion | required "ERROR: CP k8sVersion is required" }}
   {{- /*
   # controls how control plane machine remediation happens.
   # remediationStrategy:
