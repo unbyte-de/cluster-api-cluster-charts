@@ -170,7 +170,6 @@ joinConfiguration:
     file:
       kubeConfig:
         {{- /*
-        # TODO how to set this?
         user:
           # exec:
           #   apiVersion: client.authentication.k8s.io/v1

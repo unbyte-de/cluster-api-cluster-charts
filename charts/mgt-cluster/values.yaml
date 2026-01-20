@@ -82,7 +82,6 @@ kubeadm:
     # defaultNotReadyTolerationSeconds: "600"
     # defaultUnreachableTolerationSeconds: "600"
   postKubeadm:
-    # yamllint disable rule:line-length
     extraCommandsCp: |-
       kubectl rollout restart -n argocd deployment.apps/argocd-applicationset-controller deployment.apps/argocd-repo-server deployment.apps/argocd-server statefulset.apps/argocd-application-controller || true
       echo "Creating etcd-client-cert secret for prometheus..."
@@ -90,7 +89,6 @@ kubeadm:
       kubectl create secret generic etcd-client-cert -n kube-prometheus-stack --from-file=ca.crt=/etc/kubernetes/pki/etcd/ca.crt --from-file=tls.crt=/etc/kubernetes/pki/etcd/healthcheck-client.crt --from-file=tls.key=/etc/kubernetes/pki/etcd/healthcheck-client.key --dry-run=client -o yaml | kubectl apply -f -
       sleep 30
       until kubectl -n argocd annotate application --all argocd.argoproj.io/refresh=hard --overwrite; do sleep 1; done
-    # yamllint enable rule:line-length
   etcd:
     encryption:
       enabled: true
@@ -286,7 +284,6 @@ install:
       releaseName: eso-providers
       version: 1.4.0
       namespace: eso-providers
-      # yamllint disable rule:line-length
       values: |-
         # This will also create a Secret to store this credentials.
         # This is needed only initially, later it will be updated by the external-secrets.
@@ -340,7 +337,6 @@ install:
                     name: "{{ .Values.install.capiMgtName }}-vault-approle"
                     key: "ESO_VAULT_SECRET_ID"
                     namespace: external-secrets
-      # yamllint enable rule:line-length
     44-vault:
       enabled: true
       namespace: vault
@@ -524,7 +520,6 @@ install:
       releaseName: argocd-apps
       version: 2.0.2
       namespace: argocd
-      # yamllint disable rule:line-length
       values: |-
         applications:
           baseline:
@@ -565,4 +560,3 @@ install:
             info:
             - name: "Baseline > Argo CD Apps:"
               value: https://gitlab.com/unbytede/unbyte-orbit/infra-services/-/tree/main/{{ .Values.install.orgName }}/{{ .Values.install.envName }}/{{ include "cluster-name" . }}/baseline/argocd-apps
-      # yamllint enable rule:line-length
