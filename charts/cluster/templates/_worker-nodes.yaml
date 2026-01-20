@@ -85,7 +85,7 @@ spec:
           {{- end }}
           namespace: {{ .Release.Namespace }}
       clusterName: {{ include "cluster-name" . }}
-      failureDomain: {{ $networking.region }}
+      failureDomain: {{ $networking.region | required "ERROR: networking region is required." }}
       infrastructureRef:
         {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
         apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
@@ -93,5 +93,5 @@ spec:
         {{- end }}
         name: {{ include "worker-hcloud-machine-template-name" . }}
         namespace: {{ .Release.Namespace }}
-      version: {{ $machines.worker.k8sVersion }}
+      version: {{ $machines.worker.k8sVersion | required "ERROR: Worker node k8sVersion is required" }}
 {{- end -}}

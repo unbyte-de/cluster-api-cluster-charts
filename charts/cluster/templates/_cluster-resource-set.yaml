@@ -119,7 +119,7 @@ stringData:
       {{ $v.repoUrl }} \
       {{- end }}
       --include-crds \
-      --kube-version {{ $.Values.install.k8sVersion }} \
+      --kube-version {{ $.Values.install.k8sVersion | required "ERROR: .Values.install.k8sVersion is required" | trimPrefix "v" }} \
       --version {{ $v.version }} \
       --namespace {{ $v.namespace }} \
       -f values_{{ $k }}.yaml >> manifests_{{ $k }}.yaml

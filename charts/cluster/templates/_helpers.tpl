@@ -103,18 +103,20 @@ If both IPv4 and IPv6 are disabled, then the private network has to be enabled.
 publicNetwork:
   enableIPv4: true
   enableIPv6: false
-imageName: {{ tpl $machines.cp.imageName . }}
+imageName: {{ tpl ($machines.cp.imageName | required "ERROR: CP imageName is required.") . }}
 placementGroupName: {{ $machines.cp.placementGroupName }}
-type: {{ $machines.cp.type }}
+type: {{ $machines.cp.type | required "ERROR: CP type is required." }}
 {{- end }}
 {{- define "cp-hcloud-machine-template-name" -}}
 {{- printf "%s-%s" (include "cp-name" .) ((include "cp-hcloud-machine-template-spec" .) | sha256sum | trunc 16) }}
 {{- end }}
 {{- define "cp-hcloud-machine-template-labels" -}}
 {{- $machines := (include "machines" .) | fromYaml -}}
-capi/osVersion: {{ $machines.cp.osVersion | quote }}
-capi/k8sVersion: {{ $machines.cp.k8sVersion | quote }}
-capi/imageName: {{ tpl $machines.cp.imageName . | quote }}
+{{- with $machines.cp.osVersion }}
+capi/osVersion: {{ . | quote }}
+{{- end }}
+capi/k8sVersion: {{ $machines.cp.k8sVersion | required "ERROR: CP k8sVersion is required" | quote }}
+capi/imageName: {{ tpl ($machines.cp.imageName | required "ERROR: CP imageName is required.") . | quote }}
 {{- end }}
 
 {{- define "worker-hcloud-machine-template-spec" -}}
@@ -122,18 +124,20 @@ capi/imageName: {{ tpl $machines.cp.imageName . | quote }}
 publicNetwork:
   enableIPv4: true
   enableIPv6: false
-imageName: {{ tpl $machines.worker.imageName . }}
+imageName: {{ tpl ($machines.worker.imageName | required "ERROR: worker imageName is required.") . }}
 placementGroupName: {{ $machines.worker.placementGroupName }}
-type: {{ $machines.worker.type }}
+type: {{ $machines.worker.type | required "ERROR: worker type is required." }}
 {{- end }}
 {{- define "worker-hcloud-machine-template-name" -}}
 {{- printf "%s-%s" (include "worker-name" .) ((include "worker-hcloud-machine-template-spec" .) | sha256sum | trunc 16) }}
 {{- end }}
 {{- define "worker-hcloud-machine-template-labels" -}}
 {{- $machines := (include "machines" .) | fromYaml -}}
-capi/osVersion: {{ $machines.worker.osVersion | quote }}
-capi/k8sVersion: {{ $machines.worker.k8sVersion | quote }}
-capi/imageName: {{ tpl $machines.worker.imageName . | quote }}
+{{- with $machines.worker.osVersion }}
+capi/osVersion: {{ . | quote }}
+{{- end }}
+capi/k8sVersion: {{ $machines.worker.k8sVersion | required "ERROR: Worker node k8sVersion is required" | quote }}
+capi/imageName: {{ tpl ($machines.worker.imageName | required "ERROR: worker imageName is required.") . | quote }}
 {{- end }}
 
 {{- define "worker-kubeadm-config-template-spec" -}}
