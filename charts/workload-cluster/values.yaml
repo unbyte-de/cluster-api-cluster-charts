@@ -101,7 +101,7 @@ install:
   # # This is only in effect if `enabled` is false. Then all resources related for this initial install process will be deleted.
   # deleteAll: true
   envName: dev
-  orgName: unbyte
+  orgName: ""  # e.g. unbyte or pbm
   extraRoles: |-
     apiVersion: rbac.authorization.k8s.io/v1
     kind: Role
