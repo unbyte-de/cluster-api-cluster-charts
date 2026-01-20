@@ -112,7 +112,7 @@ type: {{ $machines.cp.type | required "ERROR: CP type is required." }}
 {{- end }}
 {{- define "cp-hcloud-machine-template-labels" -}}
 {{- $machines := (include "machines" .) | fromYaml -}}
-{{- with $machines.cp.osVersion }}
+{{- with $machines.cp.osVersion -}}
 capi/osVersion: {{ . | quote }}
 {{- end }}
 capi/k8sVersion: {{ $machines.cp.k8sVersion | required "ERROR: CP k8sVersion is required" | quote }}
@@ -133,7 +133,7 @@ type: {{ $machines.worker.type | required "ERROR: worker type is required." }}
 {{- end }}
 {{- define "worker-hcloud-machine-template-labels" -}}
 {{- $machines := (include "machines" .) | fromYaml -}}
-{{- with $machines.worker.osVersion }}
+{{- with $machines.worker.osVersion -}}
 capi/osVersion: {{ . | quote }}
 {{- end }}
 capi/k8sVersion: {{ $machines.worker.k8sVersion | required "ERROR: Worker node k8sVersion is required" | quote }}

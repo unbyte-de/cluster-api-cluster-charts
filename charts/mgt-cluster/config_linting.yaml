@@ -21,5 +21,7 @@ hCloud:
       buildTimestamp: "1744781328"
 
 install:
+  # enabled: false
+  # # deleteAll: true
   envName: prod
   capiMgtName: capi-mgt

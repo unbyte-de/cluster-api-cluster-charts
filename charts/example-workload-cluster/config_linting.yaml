@@ -1,0 +1,29 @@
+---
+cluster:
+  name: "unbyte-hcloud-fsn1-linting-01"
+
+hCloud:
+  sshKeys:
+  - KenanErdogan
+  - MarcZimmermann
+  # token:
+  #   # TODO Secret must already exist
+  #   existingSecret: true
+  #   # if management cluster
+  #   move: false
+  networking:
+    servicesIpv4Cidr: "10.3.8.0/21"
+    podsIpv4Cidr: "10.3.16.0/20"
+    region: "nbg1"
+  machines:
+    # TODO Images must be already created via https://github.com/unbyte-de/cluster-api-machine-images
+    cp:
+      osVersion: "2404"
+      k8sVersion: "v1.31.4"
+      imageName: "cluster-api-ubuntu-2404-v1.31.4-<timestamp>"
+    worker:
+      osVersion: "2404"
+      k8sVersion: "v1.31.4"
+      imageName: "cluster-api-ubuntu-2404-v1.31.4-<timestamp>"
+install:
+  k8sVersion: "v1.31.4"
