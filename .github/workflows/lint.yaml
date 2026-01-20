@@ -57,6 +57,14 @@ jobs:
         helm dependency update charts/cluster
         helm lint charts/cluster
 
+    - name: Lint example-workload-cluster
+      run: |
+        helm dependency update charts/example-workload-cluster
+        helm lint charts/example-workload-cluster -f charts/example-workload-cluster/config_linting.yaml
+        helm template charts/example-workload-cluster -f charts/example-workload-cluster/config_linting.yaml --output-dir /tmp/example-workload-cluster-linting-output
+        yamlfmt -conf=./.yamlfmt -lint -quiet "/tmp/example-workload-cluster-linting-output/**/*.{yaml,yml}"
+        rm -rf /tmp/example-workload-cluster-linting-output
+
     - name: Lint mgt-cluster
       run: |
         helm dependency update charts/mgt-cluster

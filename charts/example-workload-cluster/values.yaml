@@ -1,0 +1,136 @@
+---
+# cluster:
+#   # Default is the release name.
+#   name: "unbyte-hcloud-fsn1-dev-01"
+
+hCloud:
+  # sshKeys: []
+  token:
+    existingSecret: true
+    move: false
+  networking:
+    # region must be defined per cluster.
+    region: ""  # e.g. "fsn1" or "nbg1"
+  # This is required to be set for each cluster.
+  # networking:
+  #   servicesIpv4Cidr: "10.3.8.0/21"
+  #   podsIpv4Cidr: "10.3.16.0/20"
+  lb:
+    new:
+      algorithm: round_robin
+      port: >-
+        {{- $networking := (include "networking" .) | fromYaml }}
+        {{ $networking.apiPort }}
+      region: >-
+        {{- $networking := (include "networking" .) | fromYaml }}
+        {{ $networking.region }}
+      type: lb11
+  machines:
+    cp:
+      type: "cpx22"
+      # osVersion: "2404"
+      # k8sVersion: "v1.31.4"
+      # imageName: "cluster-api-ubuntu-<os-version>-<k8s-version>-<timestamp>"
+      replicas: 3
+      remediation:
+        enabled: true
+    worker:
+      type: "cpx22"
+      # osVersion: "2404"
+      # k8sVersion: "v1.31.4"
+      # imageName: "cluster-api-ubuntu-<os-version>-<k8s-version>-<timestamp>"
+      replicas: 3
+      remediation:
+        enabled: true
+
+etcKubernetes:
+  gitRepoUrl: https://github.com/unbyte-de/etc-kubernetes.git
+
+admissionPlugins:
+  podSecurity:
+    enabled: false
+
+kubeadm:
+  disableKubeProxy: true
+  setKubeletNodeIp: true
+  postKubeadm:
+    extraCommandsCp: |-
+      kubectl rollout restart -n argocd deployment.apps/argocd-applicationset-controller deployment.apps/argocd-repo-server deployment.apps/argocd-server statefulset.apps/argocd-application-controller || true
+
+# Here we define initial resources which are applied by CAPI (ClusterResourceset) just after cluster creation.
+# Note that there are also some installations defined in the cluster chart such as `cilium` and `Hetzner Cloud Cloud Controller`,
+install:
+  # enabled: false
+  # # This is only in effect if `enabled` is false. Then all resources related for this initial install process will be deleted.
+  # deleteAll: true
+  envName: dev
+  orgName: "unbyte"
+  # extraRoles:
+  resources:
+    45-argocd:
+      enabled: true
+      repoUrl: https://argoproj.github.io/argo-helm
+      chart: argo-cd
+      createNamespace: true
+      releaseName: argocd
+      version: 8.6.1
+      namespace: argocd
+      values: |-
+        crds:
+          install: true
+        configs:
+          clusterCredentials:
+            {{ include "cluster-name" . }}:
+              server: https://kubernetes.default.svc
+              config:
+                tlsClientConfig:
+                  insecure: false
+    # To deploy everything else. Here we only define `baseline` application, which will deploy all others.
+    50-argocd-apps:
+      enabled: true
+      repoUrl: https://argoproj.github.io/argo-helm
+      chart: argocd-apps
+      releaseName: argocd-apps
+      version: 2.0.2
+      namespace: argocd
+      # TODO update URLs after we have an example repo on github
+      values: |-
+        applications:
+          baseline:
+            namespace: argocd
+            finalizers:
+            - argocd.argoproj.io/resources-finalizer
+            project: default
+            sources:
+            - repoURL: https://argoproj.github.io/argo-helm
+              targetRevision: 2.0.2
+              chart: argocd-apps
+              helm:
+                releaseName: argocd-apps
+                valueFiles:
+                # Here we have to escape this dollar sign, otherwise it is rendered by bash in ClusterResourceSet job script.
+                - \$configvalues/{{ .Values.install.orgName }}/{{ .Values.install.envName }}/{{ include "cluster-name" . }}/baseline/argocd-apps/config.yaml
+            - repoURL: https://gitlab.com/unbytede/unbyte-orbit/infra-services.git
+              targetRevision: HEAD
+              ref: configvalues
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: argocd
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
+              retry:
+                backoff:
+                  duration: 5s
+                  factor: 2
+                  maxDuration: 3m
+                limit: 5
+              syncOptions:
+              - Validate=true
+              - CreateNamespace=true
+              - PrunePropagationPolicy=foreground
+              - PruneLast=true
+            info:
+            - name: "Baseline > Argo CD Apps:"
+              value: https://gitlab.com/unbytede/unbyte-orbit/infra-services/-/tree/main/{{ .Values.install.orgName }}/{{ .Values.install.envName }}/{{ include "cluster-name" . }}/baseline/argocd-apps

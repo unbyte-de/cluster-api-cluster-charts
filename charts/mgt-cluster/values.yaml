@@ -108,6 +108,7 @@ install:
   # enabled: false
   # # This is only in effect if `enabled` is false. Then all resources related for this initial install process will be deleted.
   # deleteAll: true
+  k8sVersion: "v1.31.4"
   envName: dev
   orgName: unbyte
   capiMgtName: capi-mgt
