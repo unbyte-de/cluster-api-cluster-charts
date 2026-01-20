@@ -290,10 +290,9 @@ exports:
       secretLabel:
         key: name
         value: cluster-resource-set-install-once
-      # yamllint disable rule:line-length
+      # https://github.com/unbyte-de/container-images/pkgs/container/container-images%2Fhelm-kubectl
       # TODO renovate
-      jobImage: harbor.devops1.pbm.sh/proxy-registry.gitlab.com/unbytede/unbyte-orbit/container-images/helm-kubectl:main@sha256:160a72c617212460d1355bd4518019eb222b81296566c417bf91ef836e87aa3d
-      # yamllint enable rule:line-length
+      jobImage: ghcr.io/unbyte-de/container-images/helm-kubectl:0.1.1@sha256:0bf43774e5d3bef8d992d3fb2dec2e5c482b0a13a2fa975f26f7d85441a0c91d
       # extraRoles:
       resources:
         10-cilium:
