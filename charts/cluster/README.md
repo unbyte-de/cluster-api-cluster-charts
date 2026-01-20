@@ -2,7 +2,7 @@
 
 This is a [library chart](https://helm.sh/docs/topics/library_charts/)
 and implemented to be used by umbrella/parent charts
-to create [Cluster API](https://cluster-api.sigs.k8s.io/) (CAPI) workload clusters
+to create [Cluster API](https://cluster-api.sigs.k8s.io/) (CAPI) clusters
 for their own purposes.
 This chart can't be installed as itself.
 

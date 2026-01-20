@@ -10,11 +10,11 @@ kind: Cluster
 metadata:
   name: {{ include "cluster-name" . }}
   namespace: {{ .Release.Namespace }}
+  # annotations:
+  #   argocd.argoproj.io/sync-wave: ""
   labels:
     name: {{ include "cluster-name" . }}
     {{- include "cluster.labels" . | nindent 4 }}
-  # annotations:
-  #   argocd.argoproj.io/sync-wave: ""
 spec:
   clusterNetwork:
     apiServerPort: {{ $networking.apiPort }}

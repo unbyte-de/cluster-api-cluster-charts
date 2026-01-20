@@ -161,10 +161,12 @@ joinConfiguration:
       streaming-connection-idle-timeout: "5m"
       tls-min-version: VersionTLS12
       tls-cipher-suites: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+  {{- /*
   # https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap/kubelet-config.html?highlight=KubeletConfiguration#use-kubeadms-kubeletconfiguration-patch-target
   # kubectl explain KubeadmControlPlane.spec.kubeadmConfigSpec.joinConfiguration.patches
   # patches:
   #   directory: /etc/kubernetes/patches
+  */}}
   {{- if .Values.kubeadm.kubeApiServer.disablePublicAccessClusterInfoConfigMap }}
   discovery:
     file:
