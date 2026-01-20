@@ -7,7 +7,7 @@ hCloud:
   - KenanErdogan
   - MarcZimmermann
   # token:
-  #   # TODO Secret must already exist
+  #   # Secret must already exist
   #   existingSecret: true
   #   # if management cluster
   #   move: false
@@ -16,7 +16,7 @@ hCloud:
     podsIpv4Cidr: "10.3.16.0/20"
     region: "nbg1"
   machines:
-    # TODO Images must be already created via https://github.com/unbyte-de/cluster-api-machine-images
+    # Images must be already created via https://github.com/unbyte-de/cluster-api-machine-images
     cp:
       osVersion: "2404"
       k8sVersion: "v1.31.4"

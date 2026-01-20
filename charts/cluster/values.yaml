@@ -29,8 +29,6 @@ exports:
       cp:
         osVersion: ""  # e.g. "2404"
         k8sVersion: ""  # e.g. "v1.31.4"
-        # TODO set this in workload cluster
-        # k8sVersion: "v1.31.4"
         imageName: ""
         replicas: 3
         # https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/healthchecking
@@ -64,8 +62,6 @@ exports:
       worker:
         osVersion: ""  # e.g. "2404"
         k8sVersion: ""  # e.g. "v1.31.4"
-        # TODO set this in workload cluster
-        # k8sVersion: "v1.31.4"
         imageName: ""
         # If autoscaler is enabled, replicas is in effect only until autoscaler is active, e.g. during bootstrap of the cluster.
         replicas: 3
@@ -290,8 +286,6 @@ exports:
       # ref: https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20200220-cluster-resource-set.md#clusterresourceset-object-definition
       strategy: ApplyOnce
       k8sVersion: ""  # e.g. "v1.31.4"
-      # TODO set this in workload cluster
-      # k8sVersion: "v1.31.4"
       secretLabel:
         key: name
         value: cluster-resource-set-install-once
