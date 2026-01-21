@@ -9,7 +9,7 @@ match_type: doublestar
 # include: []
 # - "**/*.{yaml,yml,yamlfmt}"
 exclude:
-- "charts/*/templates/*"  # exclude Helm templates
+- "charts/**/templates/*"  # exclude Helm templates
 extensions:
 - .yaml
 - .yml

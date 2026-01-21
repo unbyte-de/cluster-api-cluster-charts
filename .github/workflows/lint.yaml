@@ -42,10 +42,10 @@ jobs:
         export PATH="$(go env GOPATH)/bin:$PATH"
         yamlfmt -version
 
-    # - name: Lint bootstrap-configs
+    # - name: Lint cluster-bootstrap-configs
     #   run: |
-    #     helm dependency update charts/bootstrap-configs
-    #     helm lint charts/bootstrap-configs
+    #     helm dependency update charts/cluster-bootstrap-configs
+    #     helm lint charts/cluster-bootstrap-configs
 
     # - name: Lint capi-providers
     #   run: |
@@ -65,13 +65,13 @@ jobs:
         yamlfmt -conf=./.yamlfmt -lint -quiet "/tmp/example-workload-cluster-linting-output/**/*.{yaml,yml}"
         rm -rf /tmp/example-workload-cluster-linting-output
 
-    - name: Lint mgt-cluster
+    - name: Lint management-cluster
       run: |
-        helm dependency update charts/mgt-cluster
-        helm lint charts/mgt-cluster -f charts/mgt-cluster/config_linting.yaml
-        helm template charts/mgt-cluster -f charts/mgt-cluster/config_linting.yaml --output-dir /tmp/mgt-cluster-linting-output
-        yamlfmt -conf=./.yamlfmt -lint -quiet "/tmp/mgt-cluster-linting-output/**/*.{yaml,yml}"
-        rm -rf /tmp/mgt-cluster-linting-output
+        helm dependency update charts/management-cluster
+        helm lint charts/management-cluster -f charts/management-cluster/config_linting.yaml
+        helm template charts/management-cluster -f charts/management-cluster/config_linting.yaml --output-dir /tmp/management-cluster-linting-output
+        yamlfmt -conf=./.yamlfmt -lint -quiet "/tmp/management-cluster-linting-output/**/*.{yaml,yml}"
+        rm -rf /tmp/management-cluster-linting-output
 
     - name: Lint workload-cluster
       run: |

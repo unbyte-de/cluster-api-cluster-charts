@@ -1,0 +1,5 @@
+---
+customDnsIp: "100.200.300.44"
+# customDnsLog: true
+kubeApiServerLoadBalancerIp: "100.200.300.55"
+unbyteMgtIngressNginxLbIp: "100.200.300.66"

@@ -1,6 +1,6 @@
 ---
 apiVersion: v2
-name: mgt-cluster
+name: management-cluster
 description: An umbrella chart for unbyte mgt clusters.
 type: application
 version: 0.10.0-rc.3

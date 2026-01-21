@@ -1,0 +1,147 @@
+---
+gitlab:
+  providers:
+    gitlab:
+      name: gitlab
+      token:
+        existingSecret: true
+        secretName: "gitlab-secret"
+        secretKey: "token"
+      url: https://gitlab.mydomain.com/
+      projectID: 11
+
+vault:
+  providers:
+    vault:
+      name: vault
+      server: "http://my.vault.server:8200"
+      path: "secret"
+      caProvider:
+        type: Secret
+        namespace: vault
+        name: secret-name
+        key: ca.crt
+      auth:
+        # appRole
+        # VaultAppRole authenticates with Vault using the
+        # App Role auth mechanism
+        # https://www.vaultproject.io/docs/auth/approle
+        appRole:
+          # Path where the App Role authentication backend is mounted
+          path: "approle"
+          # RoleID configured in the App Role authentication backend
+          roleId: "db02de05-fa39-4855-059b-67221c5c2f63"
+          # Reference to a key in a K8 Secret that contains the App Role SecretId
+          secretRef:
+            name: "my-secret"
+            key: "secret-id"
+            namespace: "capi-mgt"
+    vault-mtls:
+      name: vault-mtls
+      server: "http://my.vault.server:8200"
+      path: "secret"
+      caProvider:
+        type: Secret
+        namespace: vault
+        name: secret-name
+        key: ca.crt
+      tls:
+        certSecretRef:
+          name: "my-cert-secret"
+          key: "tls.crt"
+        keySecretRef:
+          name: "my-cert-secret"
+          key: "tls.key"
+      auth:
+        appRole:
+          path: "approle"
+          roleRef:
+            name: "my-secret"
+            key: "role-id"
+            namespace: "capi-mgt"
+          secretRef:
+            name: "my-secret"
+            key: "secret-id"
+            namespace: "capi-mgt"
+    vault-mtls-init:
+      name: vault-mtls-init
+      server: "http://my.vault.server:8200"
+      path: "secret"
+      mtls:
+        # caCrt: |-
+        #   {{- index (lookup "v1" "Secret" "cert-manager" "ca-secret").data "ca.crt" }}
+        caCrt: "xxx"
+        tlsCrt: "yyy"
+        tlsKey: "zzz"
+      caProvider:
+        type: Secret
+        name: vault-client-cert
+        key: ca.crt
+        namespace: external-secrets
+      tls:
+        certSecretRef:
+          name: vault-client-cert
+          key: tls.crt
+          namespace: external-secrets
+        keySecretRef:
+          name: vault-client-cert
+          key: tls.key
+          namespace: external-secrets
+      auth:
+        appRole:
+          path: approle
+          roleRef:
+            name: vault-approle
+            key: role-id
+            namespace: external-secrets
+          secretRef:
+            name: vault-approle
+            key: secret-id
+            namespace: external-secrets
+    vault-mtls-init-2:
+      name: vault-mtls-init-2
+      server: "http://my.vault.server:8200"
+      path: "secret"
+      mtls:
+        # caCrt: |-
+        #   {{- index (lookup "v1" "Secret" "cert-manager" "ca-secret").data "ca.crt" }}
+        caCrt: "xxx"
+        tlsCrt: "yyy"
+        tlsKey: "zzz"
+        secretName: "xyz-vault-client-cert"
+      caProvider:
+        type: Secret
+        name: vault-client-cert
+        key: ca.crt
+        namespace: external-secrets
+      tls:
+        certSecretRef:
+          name: vault-client-cert
+          key: tls.crt
+          namespace: external-secrets
+        keySecretRef:
+          name: vault-client-cert
+          key: tls.key
+          namespace: external-secrets
+      auth:
+        appRole:
+          path: approle
+          roleRef:
+            name: vault-approle
+            key: role-id
+            namespace: external-secrets
+          secretRef:
+            name: vault-approle
+            key: secret-id
+            namespace: external-secrets
+
+authSecret:
+  # secretName: "xyz-vault-approle"
+  # ESO_VAULT_ROLE_ID: |-
+  #   {{ (lookup "v1" "Secret" "eso-providers" "unbyte-mgt-vault-approle").data.ESO_VAULT_ROLE_ID | trim }}
+  # ESO_VAULT_SECRET_ID: |-
+  #   {{ (lookup "v1" "Secret" "eso-providers" "unbyte-mgt-vault-approle").data.ESO_VAULT_SECRET_ID | trim }}
+  ESO_VAULT_ROLE_ID: |-
+    {{ "abc" | b64enc }}
+  ESO_VAULT_SECRET_ID: |-
+    {{ "xyz" | b64enc }}
