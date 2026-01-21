@@ -1,0 +1,50 @@
+{{- range $k, $v := .Values.gitlab.providers }}
+{{- if not .token.existingSecret }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $v.token.secretName }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    type: gitlab
+    app.kubernetes.io/component: {{ $v.name }}-secret-store
+    {{- include "eso-providers.labels" $ | nindent 4 }}
+type: Opaque
+stringData:
+  token: "{{ $v.token.value }}"
+{{- end }}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: {{ $v.name }}-secret-store
+  labels:
+    app.kubernetes.io/component: {{ $v.name }}-secret-store
+    {{- include "eso-providers.labels" $ | nindent 4 }}
+spec:
+  provider:
+    {{- /*
+    provider type: gitlab
+    */}}
+    gitlab:
+      {{- /*
+      Defaults to https://gitlab.com/.
+      */}}
+      {{- if $v.url }}
+      url: {{ $v.url }}
+      {{- end }}
+      auth:
+        SecretRef:
+          accessToken:
+            name: {{ $v.token.secretName }}
+            key: {{ $v.token.secretKey }}
+            namespace: {{ $.Release.Namespace }}
+      projectID: "{{ $v.projectID }}"
+      {{- /*
+      groupIDs:
+      - "${CI_PROJECT_NAMESPACE_ID}"
+      inheritFromGroups: false
+      environment: "**environment scope goes here**"
+      */}}
+{{- end }}

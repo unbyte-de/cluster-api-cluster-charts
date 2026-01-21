@@ -1,0 +1,44 @@
+{{- range $k, $v := .Values.vault.providers }}
+{{- if $v.mtls }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $v.mtls.secretName | default "vault-client-cert" }}
+  namespace: external-secrets
+  labels:
+    app.kubernetes.io/component: {{ $v.name }}-secret-store
+    {{- include "eso-providers.labels" $ | nindent 4 }}
+type: Opaque
+data:
+  ca.crt: {{ tpl $v.mtls.caCrt $ }}
+  tls.crt: {{ tpl $v.mtls.tlsCrt $ }}
+  tls.key: {{ tpl $v.mtls.tlsKey $ }}
+{{- end }}
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: {{ $v.name }}-secret-store
+  labels:
+    app.kubernetes.io/component: {{ $v.name }}-secret-store
+    {{- include "eso-providers.labels" $ | nindent 4 }}
+spec:
+  provider:
+    vault:
+      server: {{ $v.server }}
+      path: {{ $v.path }}
+      {{- /*
+      Version is the Vault KV secret engine version.
+      This can be either "v1" or "v2", defaults to "v2"
+      */}}
+      version: "v2"
+      {{- with $v.caProvider }}
+      caProvider: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $v.tls }}
+      tls: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # https://external-secrets.io/latest/provider/hashicorp-vault/#authentication
+      auth: {{- toYaml $v.auth | nindent 8 }}
+{{- end }}

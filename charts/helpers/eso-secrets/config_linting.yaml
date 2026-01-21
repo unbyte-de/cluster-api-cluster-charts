@@ -1,0 +1,102 @@
+---
+externalSecrets:
+  myExternalSecret:
+    metadata:
+      name: my-external-secret
+      namespace: a-ns
+    spec:
+      refreshInterval: 1h
+      secretStoreRef:
+        kind: ClusterSecretStore
+        name: vault-secret-store
+      data:
+      - remoteRef:
+          key: external-secrets/push-secrets/my-external-secret
+          property: value
+        secretKey: value
+      target:
+        creationPolicy: Merge
+        # deletionPolicy: Retain
+        name: my-external-secret
+  anotherSecret:
+    metadata:
+      name: another-secret
+      namespace: another-ns
+    spec:
+      # refreshInterval: 1h
+      # secretStoreRef:
+      #   kind: ClusterSecretStore
+      #   name: vault-secret-store
+      data:
+      - remoteRef:
+          key: external-secrets/push-secrets/another-secret
+          property: token
+        secretKey: token
+      target:
+        # creationPolicy: Owner
+        deletionPolicy: Delete
+        name: another-secret
+        template:
+          type: kubernetes.io/test
+          metadata:
+            labels:
+              argocd.argoproj.io/secret-type: repository
+
+pushSecrets:
+  myPushSecret:
+    metadata:
+      name: my-push-secret
+      namespace: a-ns
+    spec:
+      refreshInterval: 1h
+      updatePolicy: Replace
+      deletionPolicy: None
+      secretStoreRefs:
+      - kind: ClusterSecretStore
+        name: vault-secret-store
+      selector:
+        secret:
+          name: my-push-secret
+      data:
+      - match:
+          secretKey: value
+          remoteRef:
+            remoteKey: external-secrets/push-secrets/my-push-secret
+            property: value
+  anotherPushSecret:
+    metadata:
+      name: another-push-secret
+      namespace: a-ns
+    spec:
+      # refreshInterval: 1h
+      # updatePolicy: Replace
+      # deletionPolicy: Delete
+      # secretStoreRefs:
+      # - kind: ClusterSecretStore
+      #   name: vault-secret-store
+      selector:
+        secret:
+          name: another-push-secret
+      data:
+      - match:
+          secretKey: value
+          remoteRef:
+            remoteKey: external-secrets/push-secrets/another-push-secret
+            property: value
+
+passwords:
+  myPassword:
+    metadata:
+      name: my-password
+      namespace: a-ns
+  myPasswordTwo:
+    metadata:
+      name: my-password-two
+      namespace: a-ns
+    spec:
+      allowRepeat: true
+      digits: 5
+      length: 32
+      noUpper: false
+      symbolCharacters: "-_$@"
+      symbols: 5

@@ -1,0 +1,78 @@
+{{- if .Values.customDnsIp }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+  labels:
+    {{- include "cluster-bootstrap-configs.labels" . | nindent 4 }}
+data:
+  Corefile: |
+    unbyte.internal:53 {
+        forward . {{ .Values.customDnsIp }} {
+            force_tcp
+        }
+        cache 30
+        {{- if .Values.customDnsLog }}
+        log
+        {{- end }}
+    }
+    .:53 {
+        errors
+        health {
+          lameduck 5s
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+          pods insecure
+          fallthrough in-addr.arpa ip6.arpa
+          ttl 30
+        }
+        prometheus :9153
+        forward . /etc/resolv.conf
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: powerdns-lb-ip
+  namespace: kube-system
+  labels:
+    {{- include "cluster-bootstrap-configs.labels" . | nindent 4 }}
+data:
+  ip: {{ .Values.customDnsIp }}
+{{- end }}
+{{- if .Values.kubeApiServerLoadBalancerIp }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k8s-service-host
+  namespace: kube-system
+  labels:
+    {{- include "cluster-bootstrap-configs.labels" . | nindent 4 }}
+  annotations:
+    description: |
+      ConfigMap to store the kube-apiserver load balancer IP.
+      This configmap used by many components.
+      Never delete this ConfigMap.
+data:
+  host: {{ .Values.kubeApiServerLoadBalancerIp }}
+{{- end }}
+{{- if .Values.unbyteMgtIngressNginxLbIp }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unbyte-mgt-ingress-nginx-lb-ip
+  namespace: kube-system
+  labels:
+    {{- include "cluster-bootstrap-configs.labels" . | nindent 4 }}
+data:
+  ip: {{ .Values.unbyteMgtIngressNginxLbIp }}
+{{- end }}
