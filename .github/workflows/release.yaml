@@ -6,7 +6,7 @@ on:
     branches:
     - main
     paths:
-    - "charts/*/Chart.yaml"
+    - "charts/**/Chart.yaml"
   workflow_dispatch:
 
 permissions:
@@ -38,8 +38,10 @@ jobs:
       run: |
         echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
 
-    - name: Package and Push Charts
+    - name: Package, Push Charts, and Tag Release
       run: |
+        set -euo pipefail
+
         # Get repository owner in lowercase
         REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
 
@@ -47,10 +49,11 @@ jobs:
         RELEASED=false
         SKIPPED=false
 
-        for chart in charts/*; do
+        for chart in $(find charts -name Chart.yaml -print | sed 's|/Chart.yaml||'); do
           if [ -d "$chart" ] && [ -f "$chart/Chart.yaml" ]; then
             chart_name=$(basename "$chart")
             chart_version=$(grep '^version:' "$chart/Chart.yaml" | awk '{print $2}')
+            tag_name="${chart_name}-${chart_version}"
 
             echo "Processing $chart_name version $chart_version"
 
@@ -72,6 +75,16 @@ jobs:
             if helm push "${chart_name}-${chart_version}.tgz" "oci://ghcr.io/${REPO_OWNER}/charts"; then
               echo "✅ Successfully released $chart_name:$chart_version"
               RELEASED=true
+
+              # Create tag if it doesn't exist locally or remotely
+              if git ls-remote --tags origin "refs/tags/${tag_name}" | grep -q "${tag_name}$"; then
+                echo "🏷️  Tag ${tag_name} already exists on origin, skipping"
+              else
+                git tag "${tag_name}"
+                git push origin "${tag_name}"
+                echo "🏷️  Pushed tag ${tag_name}"
+              fi
+
             else
               echo "❌ Failed to release $chart_name:$chart_version"
               exit 1
