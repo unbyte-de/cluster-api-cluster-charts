@@ -42,16 +42,6 @@ jobs:
         export PATH="$(go env GOPATH)/bin:$PATH"
         yamlfmt -version
 
-    # - name: Lint cluster-bootstrap-configs
-    #   run: |
-    #     helm dependency update charts/cluster-bootstrap-configs
-    #     helm lint charts/cluster-bootstrap-configs
-
-    # - name: Lint capi-providers
-    #   run: |
-    #     helm dependency update charts/capi-providers
-    #     helm lint charts/capi-providers
-
     - name: Lint cluster
       run: |
         helm dependency update charts/cluster
@@ -80,3 +70,27 @@ jobs:
         helm template charts/workload-cluster -f charts/workload-cluster/config_linting.yaml --output-dir /tmp/workload-cluster-linting-output
         yamlfmt -conf=./.yamlfmt -lint -quiet "/tmp/workload-cluster-linting-output/**/*.{yaml,yml}"
         rm -rf /tmp/workload-cluster-linting-output
+
+    - name: Lint cluster-bootstrap-configs
+      run: |
+        helm dependency update charts/helpers/cluster-bootstrap-configs
+        helm lint charts/helpers/cluster-bootstrap-configs -f charts/helpers/cluster-bootstrap-configs/config_linting.yaml
+        helm template charts/helpers/cluster-bootstrap-configs -f charts/helpers/cluster-bootstrap-configs/config_linting.yaml --output-dir /tmp/helpers/cluster-bootstrap-configs-linting-output
+        yamlfmt -conf=./.yamlfmt -lint -quiet "/tmp/helpers/cluster-bootstrap-configs-linting-output/**/*.{yaml,yml}"
+        rm -rf /tmp/helpers/cluster-bootstrap-configs-linting-output
+
+    - name: Lint eso-providers
+      run: |
+        helm dependency update charts/helpers/eso-providers
+        helm lint charts/helpers/eso-providers -f charts/helpers/eso-providers/config_linting.yaml
+        helm template charts/helpers/eso-providers -f charts/helpers/eso-providers/config_linting.yaml --output-dir /tmp/helpers/eso-providers-linting-output
+        yamlfmt -conf=./.yamlfmt -lint -quiet "/tmp/helpers/eso-providers-linting-output/**/*.{yaml,yml}"
+        rm -rf /tmp/helpers/eso-providers-linting-output
+
+    - name: Lint eso-secrets
+      run: |
+        helm dependency update charts/helpers/eso-secrets
+        helm lint charts/helpers/eso-secrets -f charts/helpers/eso-secrets/config_linting.yaml
+        helm template charts/helpers/eso-secrets -f charts/helpers/eso-secrets/config_linting.yaml --output-dir /tmp/helpers/eso-secrets-linting-output
+        yamlfmt -conf=./.yamlfmt -lint -quiet "/tmp/helpers/eso-secrets-linting-output/**/*.{yaml,yml}"
+        rm -rf /tmp/helpers/eso-secrets-linting-output
