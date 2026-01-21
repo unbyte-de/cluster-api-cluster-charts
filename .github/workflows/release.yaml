@@ -44,6 +44,7 @@ jobs:
 
         # Get repository owner in lowercase
         REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+        REPO_NAME=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
 
         # Track if any charts were released
         RELEASED=false
@@ -58,7 +59,7 @@ jobs:
             echo "Processing $chart_name version $chart_version"
 
             # Check if this version already exists
-            if helm pull "oci://ghcr.io/${REPO_OWNER}/charts/${chart_name}" --version "${chart_version}" 2>/dev/null; then
+            if helm pull "oci://ghcr.io/${REPO_OWNER}/${REPO_NAME}/${chart_name}" --version "${chart_version}" 2>/dev/null; then
               echo "⏭️  Skipping ${chart_name}:${chart_version} - already exists in registry"
               rm -f "${chart_name}-${chart_version}.tgz"
               SKIPPED=true
@@ -72,7 +73,7 @@ jobs:
             helm package "$chart"
 
             # Push to GHCR
-            if helm push "${chart_name}-${chart_version}.tgz" "oci://ghcr.io/${REPO_OWNER}/charts"; then
+            if helm push "${chart_name}-${chart_version}.tgz" "oci://ghcr.io/${REPO_OWNER}/${REPO_NAME}"; then
               echo "✅ Successfully released $chart_name:$chart_version"
               RELEASED=true
 
