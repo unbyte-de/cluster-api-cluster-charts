@@ -3,5 +3,5 @@ apiVersion: v2
 name: cluster-bootstrap-configs
 description: A Helm chart to create required configs duing bootstrap like CoreDNS configuration
 type: application
-version: 0.4.0-rc.1
+version: 0.4.0-rc.5
 # appVersion: "1.16.0"
