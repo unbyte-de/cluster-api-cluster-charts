@@ -6,13 +6,13 @@
 
 # cluster-api-cluster-charts
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Helm](https://img.shields.io/badge/Helm-3.x-0f1689.svg)](https://helm.sh)
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io-181717?logo=github&logoColor=white&label=charts)](https://github.com/orgs/unbyte-de/packages?repo_name=cluster-api-cluster-charts)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-1.31+-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io)
 [![Cluster API](https://img.shields.io/badge/Cluster%20API-v1beta1-326CE5?logo=kubernetes&logoColor=white)](https://cluster-api.sigs.k8s.io/)
 [![Hetzner Cloud](https://img.shields.io/badge/Hetzner%20Cloud-D50C2D?logo=hetzner&logoColor=white)](https://www.hetzner.com/cloud)
 [![Kubeadm](https://img.shields.io/badge/Bootstrap-kubeadm-326CE5)](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/)
+<!-- [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE) -->
 <!-- [![GitHub release](https://img.shields.io/github/v/release/unbyte/cluster-api-cluster-charts)](https://github.com/unbyte/cluster-api-cluster-charts/releases) -->
 <!-- [![GitHub Actions](https://img.shields.io/github/actions/workflow/status/unbyte/cluster-api-cluster-charts/lint.yaml?label=lint)](https://github.com/unbyte-de/cluster-api-cluster-charts/actions/workflows/lint.yaml) -->
 <!-- [![Pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit) -->
