@@ -212,36 +212,6 @@ install:
       kind: Role
       name: {{ include "cluster-name" . }}-install
       apiGroup: rbac.authorization.k8s.io
-    ---
-    apiVersion: rbac.authorization.k8s.io/v1
-    kind: Role
-    metadata:
-      name: {{ include "cluster-name" . }}-install
-      namespace: argocd
-    rules:
-    - apiGroups:
-      - ""
-      resources:
-      - "secrets"
-      verbs:
-      - "get"
-      - "list"
-      resourceNames:
-      - "repo-charts"
-    ---
-    apiVersion: rbac.authorization.k8s.io/v1
-    kind: RoleBinding
-    metadata:
-      name: {{ include "cluster-name" . }}-install
-      namespace: argocd
-    subjects:
-    - kind: ServiceAccount
-      name: {{ include "cluster-name" . }}-install
-      namespace: {{ .Release.Namespace }}
-    roleRef:
-      kind: Role
-      name: {{ include "cluster-name" . }}-install
-      apiGroup: rbac.authorization.k8s.io
     {{- if .Values.kubeadm.disableKubeProxy }}
     ---
     apiVersion: rbac.authorization.k8s.io/v1
@@ -280,11 +250,8 @@ install:
     41-cluster-bootstrap-configs:
       enabled: true
       strategy: Reconcile
-      repoUrl: https://gitlab.com/api/v4/projects/65336103/packages/helm/stable
-      repoCreds:
-        username: "$(kubectl get secret -n argocd repo-charts -o jsonpath='{.data.username}' | base64 -d)"
-        password: "$(kubectl get secret -n argocd repo-charts -o jsonpath='{.data.password}' | base64 -d)"
-      chart: cluster-bootstrap-configs
+      repoUrl: oci://ghcr.io/unbyte-de/cluster-api-cluster-charts/cluster-bootstrap-configs
+      # chart: cluster-bootstrap-configs
       createNamespace: false
       releaseName: cluster-bootstrap-configs
       version: 0.4.0
@@ -315,11 +282,8 @@ install:
     # The one for the vault server in `unbyte-mgt` cluster is defined in bootstrap script and infra-services repo.
     43-eso-providers:
       enabled: true
-      repoUrl: https://gitlab.com/api/v4/projects/65336103/packages/helm/stable
-      repoCreds:
-        username: "$(kubectl get secret -n argocd repo-charts -o jsonpath='{.data.username}' | base64 -d)"
-        password: "$(kubectl get secret -n argocd repo-charts -o jsonpath='{.data.password}' | base64 -d)"
-      chart: eso-providers
+      repoUrl: oci://ghcr.io/unbyte-de/cluster-api-cluster-charts/eso-providers
+      # chart: eso-providers
       createNamespace: false
       releaseName: eso-providers
       version: 1.5.0
@@ -385,11 +349,8 @@ install:
     # Define initally required secrets like repo credentials for ArgoCD
     45-eso-secrets:
       enabled: true
-      repoUrl: https://gitlab.com/api/v4/projects/65336103/packages/helm/stable
-      repoCreds:
-        username: "$(kubectl get secret -n argocd repo-charts -o jsonpath='{.data.username}' | base64 -d)"
-        password: "$(kubectl get secret -n argocd repo-charts -o jsonpath='{.data.password}' | base64 -d)"
-      chart: eso-secrets
+      repoUrl: oci://ghcr.io/unbyte-de/cluster-api-cluster-charts/eso-secrets
+      # chart: eso-secrets
       createNamespace: true
       releaseName: eso-secrets
       version: 0.5.0
@@ -488,42 +449,6 @@ install:
                 secretKey: type
               target:
                 name: repo-infra-services
-                template:
-                  metadata:
-                    labels:
-                      argocd.argoproj.io/secret-type: repository
-          repoCharts:
-            metadata:
-              name: repo-charts
-              namespace: argocd
-            spec:
-              refreshInterval: 1m
-              secretStoreRef:
-                kind: ClusterSecretStore
-                name: {{ .Values.install.capiMgtName }}-vault-secret-store
-              data:
-              - remoteRef:
-                  key: unbyte-orbit/external-secrets/push-secrets/shared/repo-charts
-                  property: password
-                secretKey: password
-              - remoteRef:
-                  key: unbyte-orbit/external-secrets/push-secrets/shared/repo-charts
-                  property: username
-                secretKey: username
-              - remoteRef:
-                  key: unbyte-orbit/external-secrets/push-secrets/shared/repo-charts
-                  property: url
-                secretKey: url
-              - remoteRef:
-                  key: unbyte-orbit/external-secrets/push-secrets/shared/repo-charts
-                  property: name
-                secretKey: name
-              - remoteRef:
-                  key: unbyte-orbit/external-secrets/push-secrets/shared/repo-charts
-                  property: type
-                secretKey: type
-              target:
-                name: repo-charts
                 template:
                   metadata:
                     labels:

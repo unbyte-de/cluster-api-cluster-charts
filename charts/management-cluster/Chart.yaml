@@ -3,11 +3,10 @@ apiVersion: v2
 name: management-cluster
 description: An umbrella chart for unbyte mgt clusters.
 type: application
-version: 0.10.0
+version: 0.10.1
 dependencies:
 - name: cluster
-  version: 0.10.0
-  # repository: https://gitlab.com/api/v4/projects/65336103/packages/helm/stable
+  version: 0.10.1
   repository: file://../cluster
   import-values:
   - data
