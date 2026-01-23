@@ -109,6 +109,13 @@ stringData:
     helm repo add {{ $k }} {{ $v.repoUrl }}
     {{- end }}
     helm repo update {{ $k }} >/dev/null
+    {{- else }}
+    {{- if and $v.repoCreds (hasPrefix "oci://" $v.repoUrl) }}
+    {{- $reg := (trimPrefix "oci://" $v.repoUrl | splitList "/" | first) }}
+    helm registry login {{ $reg }} \
+      --username "{{ $v.repoCreds.username }}" \
+      --password "{{ $v.repoCreds.password }}"
+    {{- end }}
     {{- end }}
     echo "---" > manifests_{{ $k }}.yaml
     helm template \
