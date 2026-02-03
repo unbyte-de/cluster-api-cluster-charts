@@ -12,7 +12,7 @@ hCloud:
     move: false
   networking:
     # region must be defined per cluster.
-    region: ""  # e.g. "fsn1" or "nbg1"
+    region: "" # e.g. "fsn1" or "nbg1"
   # This is required to be set for each unbyte cluster.
   # networking:
   #   servicesIpv4Cidr: "10.3.8.0/21"
@@ -109,7 +109,7 @@ install:
   # deleteAll: true
   k8sVersion: "v1.31.4"
   envName: dev
-  orgName: ""  # e.g. unbyte or pbm
+  orgName: "" # e.g. unbyte or pbm
   extraRoles: |-
     apiVersion: rbac.authorization.k8s.io/v1
     kind: Role

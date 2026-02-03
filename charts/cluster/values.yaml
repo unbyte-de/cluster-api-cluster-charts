@@ -27,8 +27,8 @@ exports:
 
     machines:
       cp:
-        osVersion: ""  # e.g. "2404"
-        k8sVersion: ""  # e.g. "v1.31.4"
+        osVersion: "" # e.g. "2404"
+        k8sVersion: "" # e.g. "v1.31.4"
         imageName: ""
         replicas: 3
         # https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/healthchecking
@@ -60,8 +60,8 @@ exports:
             status: "False"
             timeout: 5m0s
       worker:
-        osVersion: ""  # e.g. "2404"
-        k8sVersion: ""  # e.g. "v1.31.4"
+        osVersion: "" # e.g. "2404"
+        k8sVersion: "" # e.g. "v1.31.4"
         imageName: ""
         # If autoscaler is enabled, replicas is in effect only until autoscaler is active, e.g. during bootstrap of the cluster.
         replicas: 3
@@ -104,7 +104,7 @@ exports:
         hcloudNetworkEnabled: false
         # https://docs.hetzner.com/cloud/general/locations/
         # https://docs.hetzner.com/cloud/networks/faq/#can-networks-span-multiple-locations
-        region: ""  # e.g. "fsn1" or "nbg1"
+        region: "" # e.g. "fsn1" or "nbg1"
         # Required only private hCloud network is enabled (hcloudNetworkEnabled).
         # networkZone: eu-central
         # Considerations on the IP Ranges. Required only private hCloud network is enabled.
@@ -147,7 +147,7 @@ exports:
           type: spread
         cp:
           # Server types: https://www.hetzner.com/cloud
-          type: ""  # e.g. cpx32
+          type: "" # e.g. cpx32
           placementGroupName: cp
           # https://syself.com/docs/caph/reference/hcloud-remediation-template
           remediation:
@@ -167,7 +167,7 @@ exports:
             type: Reboot
         worker:
           # Server types: https://www.hetzner.com/cloud
-          type: ""  # e.g. cpx42
+          type: "" # e.g. cpx42
           placementGroupName: worker
           remediation:
             # Disable HCloudRemediationTemplate and rely on default remediation
@@ -179,7 +179,7 @@ exports:
 
     # To write custom config into /etc/kubernetes/ in CP nodes.
     etcKubernetes:
-      gitRepoUrl: ""  # https://github.com/unbyte-de/etc-kubernetes.git
+      gitRepoUrl: "" # https://github.com/unbyte-de/etc-kubernetes.git
 
     # https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/
     admissionPlugins:
@@ -264,7 +264,7 @@ exports:
         defaultNotReadyTolerationSeconds: "300"
         defaultUnreachableTolerationSeconds: "300"
       # Setting this to <cluster-name>.k8s or <cluster-name>.cluster.local would be useful when using cilium clustermesh global services.
-      clusterDnsDomain: ""  # Defaults to "cluster.local"
+      clusterDnsDomain: "" # Defaults to "cluster.local"
       postKubeadm:
         # extraFiles:
         extraCommandsCp: ""
@@ -285,7 +285,7 @@ exports:
       # "ApplyOnce" mode must be used so that reconciliation on those resources can be delegated to the operator.
       # ref: https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20200220-cluster-resource-set.md#clusterresourceset-object-definition
       strategy: ApplyOnce
-      k8sVersion: ""  # e.g. "v1.31.4"
+      k8sVersion: "" # e.g. "v1.31.4"
       secretLabel:
         key: name
         value: cluster-resource-set-install-once

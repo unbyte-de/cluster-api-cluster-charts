@@ -91,3 +91,13 @@ This repository intentionally does **not** include:
 - Charts intended to be reused independently of Cluster API cluster provisioning
 
 Such charts belong in separate, dedicated repositories (e.g. platform add-ons).
+
+## Local Developmemt
+
+To run yamlfmt locally:
+
+```sh
+yamlfmt "**/*.{yaml,yml,yamlfmt}"
+# Or remove -quiet and/or -lint flag of yamlfmt in .pre-commit-config.yaml and run
+pre-commit run --all-files
+```
