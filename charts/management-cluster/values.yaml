@@ -274,7 +274,7 @@ install:
       chart: external-secrets
       createNamespace: true
       releaseName: external-secrets
-      version: 0.18.2
+      version: 0.20.4
       namespace: external-secrets
       values: ""
     # Install a vault provider. Note that here we get `AppRole` credentials and vault CA cert initially from `capi-mgt` cluster.
