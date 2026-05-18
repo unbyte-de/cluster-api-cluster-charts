@@ -103,7 +103,7 @@ This repository intentionally does **not** include:
 
 Such charts belong in separate, dedicated repositories (e.g. platform add-ons).
 
-## Local Developmemt
+## Developmemt
 
 To run yamlfmt locally:
 
