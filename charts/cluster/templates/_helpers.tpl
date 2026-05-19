@@ -50,6 +50,22 @@ app.kubernetes.io/name: {{ include "cluster.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
+{{/*
+fetchNodeIp emits a one-line bash assignment that sets NODEIP to the node's
+public IPv4 from the Hetzner Cloud metadata service, with bounded retry and a
+hard per-request timeout. Replaces the previous unbounded curl to api.ipify.org,
+which masked failures via `tr` and silently wrote empty values into kubelet/etcd
+flags when ipify was unreachable.
+The IP 169.254.169.254 is the link-local address for the Hetzner Cloud Metadata Service.
+It allows instances to securely access their own configuration, user data, and
+network details from within the server itself without routing through the public internet.
+Stays single-line because this is emitted into postKubeadmCommands.sh, which
+ships via cloud-init user-data and has a size budget.
+*/}}
+{{- define "cluster.fetchNodeIp" -}}
+NODEIP=$(curl -fsS --max-time 5 --retry 3 --retry-delay 2 http://169.254.169.254/hetzner/v1/metadata/public-ipv4)
+{{- end }}
+
 {{- if or .Values.hCloud.lb.existing.ip .Values.hCloud.lb.new }}
 {{ else }}
 {{- fail "Please use an existing LB via '.Values.hCloud.lb.existing' or add configuration for a new one via '.Values.hCloud.lb.new'." }}
@@ -227,7 +243,7 @@ files:
     echo "postKubeadmCommands started!"
 
     {{- if .Values.kubeadm.setKubeletNodeIp }}
-    NODEIP=$(curl -s https://api.ipify.org | tr -d '\n')
+    {{- include "cluster.fetchNodeIp" . | nindent 4 }}
     echo "$NODEIP"
     sed -i "/--node-ip/d" /var/lib/kubelet/kubeadm-flags.env
     echo "KUBELET_KUBEADM_ARGS=\"--node-ip=$NODEIP $(cat /var/lib/kubelet/kubeadm-flags.env \

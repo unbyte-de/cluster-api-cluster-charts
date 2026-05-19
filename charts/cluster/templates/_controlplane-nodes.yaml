@@ -174,7 +174,7 @@ spec:
           bind-address: 0.0.0.0
           cloud-provider: external
           cluster-signing-cert-file: /etc/kubernetes/pki/ca.crt
-          cluster-signing-duration: 2160h0m0s  # 90 days. Default is 8760h0m0s (1 year).
+          cluster-signing-duration: 2160h0m0s # 90 days. Default is 8760h0m0s (1 year).
           cluster-signing-key-file: /etc/kubernetes/pki/ca.key
           # feature-gates: RotateKubeletServerCertificate=true,AppArmor=true
           kubeconfig: /etc/kubernetes/controller-manager.conf
@@ -272,7 +272,7 @@ spec:
 
         while [ ! -f /etc/kubernetes/manifests/etcd.yaml ]; do sleep 10; done
         echo "Configuring etcd metrics URLs..."
-        NODEIP=$(curl -s https://api.ipify.org | tr -d '\n')
+        {{- include "cluster.fetchNodeIp" . | nindent 8 }}
         sed -i "s|--listen-metrics-urls=http://127.0.0.1:2381|--listen-metrics-urls=https://$NODEIP:2381,http://127.0.0.1:2381|" /etc/kubernetes/manifests/etcd.yaml
         cat /etc/kubernetes/manifests/etcd.yaml | grep -i "listen-metrics-urls"
         while [ ! -f /etc/kubernetes/manifests/kube-scheduler.yaml ]; do sleep 10; done
