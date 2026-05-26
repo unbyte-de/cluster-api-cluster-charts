@@ -1,0 +1,62 @@
+{
+  "model": "sonnet",
+  "effortLevel": "medium",
+  "statusLine": {
+    "type": "command",
+    "command": "echo \"$(basename $PWD) | $(git branch --show-current)\""
+  },
+  "permissions": {
+    "defaultMode": "default",
+    "allow": [
+      "Bash(just --list)",
+      "Bash(just default)",
+      "Bash(just lint)",
+      "Bash(just lint-cluster)",
+      "Bash(just lint-chart:*)",
+      "Bash(just lint-apps)",
+      "Bash(helm lint:*)",
+      "Bash(helm template:*)",
+      "Bash(helm dependency update:*)",
+      "Bash(helm dependency build:*)",
+      "Bash(helm dependency list:*)",
+      "Bash(helm show:*)",
+      "Bash(helm search:*)",
+      "Bash(pre-commit run:*)",
+      "Bash(pre-commit validate-config)",
+      "Bash(yamlfmt -lint:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(yq:*)",
+      "Bash(jq:*)",
+      "Bash(rg:*)",
+      "Bash(fd:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)"
+    ],
+    "ask": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [
+      "Bash(helm install:*)",
+      "Bash(helm upgrade:*)",
+      "Bash(helm uninstall:*)",
+      "Bash(helm rollback:*)",
+      "Bash(helm push:*)",
+      "Bash(helm registry login:*)",
+      "Bash(kubectl:*)",
+      "Bash(clusterctl:*)",
+      "Bash(git push:*)",
+      "Bash(git reset:*)",
+      "Bash(git rebase:*)",
+      "Bash(gh:*)",
+      "Bash(docker:*)"
+    ]
+  }
+}
