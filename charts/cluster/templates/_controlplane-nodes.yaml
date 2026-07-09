@@ -82,7 +82,6 @@ spec:
           {{- end }}
           authorization-mode: Node,RBAC
           client-ca-file: /etc/kubernetes/pki/ca.crt
-          cloud-provider: external
           default-not-ready-toleration-seconds: {{ .Values.kubeadm.kubeApiServer.defaultNotReadyTolerationSeconds | quote }}
           default-unreachable-toleration-seconds: {{ .Values.kubeadm.kubeApiServer.defaultUnreachableTolerationSeconds | quote }}
           enable-aggregator-routing: "true"
