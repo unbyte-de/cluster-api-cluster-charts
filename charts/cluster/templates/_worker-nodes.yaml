@@ -22,7 +22,7 @@ spec:
 {{- end }}
 {{- if eq .Values.capi.providers.bootstrap.name "kubeadm" }}
 ---
-apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
 kind: KubeadmConfigTemplate
 metadata:
   name: {{ include "worker-kubeadm-config-template-name" . }}
@@ -40,7 +40,7 @@ spec:
     spec: {{- include "worker-kubeadm-config-template-spec" . | nindent 6 }}
 {{- end }}
 ---
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineDeployment
 metadata:
   name: {{ include "worker-name" . }}
@@ -76,22 +76,24 @@ spec:
         nodepool: {{ include "worker-name" . }}
         # cluster.x-k8s.io/cluster-name: {{ include "cluster-name" . }}
     spec:
+      {{- /*
+      v1beta2: bootstrap.configRef and infrastructureRef are ContractVersionedObjectReference
+      (apiGroup + kind + name). apiVersion -> apiGroup; namespace removed (same-namespace only).
+      */}}
       bootstrap:
         configRef:
           {{- if eq .Values.capi.providers.bootstrap.name "kubeadm" }}
-          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          apiGroup: bootstrap.cluster.x-k8s.io
           kind: KubeadmConfigTemplate
           name: {{ include "worker-kubeadm-config-template-name" . }}
           {{- end }}
-          namespace: {{ .Release.Namespace }}
       clusterName: {{ include "cluster-name" . }}
       failureDomain: {{ $networking.region | required "ERROR: networking region is required." }}
       infrastructureRef:
         {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
-        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        apiGroup: infrastructure.cluster.x-k8s.io
         kind: HCloudMachineTemplate
         {{- end }}
         name: {{ include "worker-hcloud-machine-template-name" . }}
-        namespace: {{ .Release.Namespace }}
       version: {{ $machines.worker.k8sVersion | required "ERROR: Worker node k8sVersion is required" }}
 {{- end -}}
