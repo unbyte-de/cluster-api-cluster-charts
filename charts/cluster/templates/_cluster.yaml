@@ -35,14 +35,15 @@ spec:
   {{- /*
   ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
   See HetznerCluster.spec.controlPlaneEndpoint
-  v1beta2: host now rejects empty strings and port rejects 0. Only set the endpoint when the
-  LB IP is actually known; otherwise omit it and let the infrastructure provider report it up.
+  v1beta2: host rejects empty strings, so only emit host when the LB IP is known -- never emit
+  host: "". port is always set. The controller populates host once the LB is provisioned; that
+  drift is absorbed by the Application's ignoreDifferences on /spec/controlPlaneEndpoint/host.
   */}}
-  {{- if .Values.hCloud.lb.existing.ip }}
   controlPlaneEndpoint:
+    {{- if .Values.hCloud.lb.existing.ip }}
     host: {{ .Values.hCloud.lb.existing.ip | quote }}
+    {{- end }}
     port: {{ $networking.apiPort }}
-  {{- end }}
   {{- /*
   v1beta2: controlPlaneRef/infrastructureRef are ContractVersionedObjectReference
   (apiGroup + kind + name). apiVersion -> apiGroup; namespace removed (must match the Cluster's namespace).
