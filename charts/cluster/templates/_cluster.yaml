@@ -5,7 +5,7 @@
 {{- /*
 https://doc.crds.dev/github.com/kubernetes-sigs/cluster-api/cluster.x-k8s.io/Cluster/v1beta1@v1.8.5
 */}}
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
   name: {{ include "cluster-name" . }}
@@ -19,7 +19,13 @@ spec:
   clusterNetwork:
     apiServerPort: {{ $networking.apiPort }}
     # Domain name for services.
-    # serviceDomain:
+    {{- /*
+    Moved here from KubeadmControlPlane.spec.kubeadmConfigSpec.clusterConfiguration.networking.dnsDomain,
+    which was removed in the CAPI v1beta2 contract (duplicate of Cluster.spec.clusterNetwork.serviceDomain).
+    */}}
+    {{- with .Values.kubeadm.clusterDnsDomain }}
+    serviceDomain: {{ . | quote }}
+    {{- end }}
     services:
       cidrBlocks:
       - {{ $networking.servicesIpv4Cidr | quote }}
@@ -29,28 +35,30 @@ spec:
   {{- /*
   ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
   See HetznerCluster.spec.controlPlaneEndpoint
+  v1beta2: host now rejects empty strings and port rejects 0. Only set the endpoint when the
+  LB IP is actually known; otherwise omit it and let the infrastructure provider report it up.
   */}}
+  {{- if .Values.hCloud.lb.existing.ip }}
   controlPlaneEndpoint:
-    {{- if .Values.hCloud.lb.existing.ip }}
     host: {{ .Values.hCloud.lb.existing.ip | quote }}
-    {{- else }}
-    host: ""
-    {{- end }}
     port: {{ $networking.apiPort }}
+  {{- end }}
+  {{- /*
+  v1beta2: controlPlaneRef/infrastructureRef are ContractVersionedObjectReference
+  (apiGroup + kind + name). apiVersion -> apiGroup; namespace removed (must match the Cluster's namespace).
+  */}}
   controlPlaneRef:
     {{- if eq .Values.capi.providers.controlPlane.name "kubeadm" }}
-    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    apiGroup: controlplane.cluster.x-k8s.io
     kind: KubeadmControlPlane
     {{- end }}
     name: {{ include "cp-name" . }}
-    namespace: {{ .Release.Namespace }}
   infrastructureRef:
     {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
-    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    apiGroup: infrastructure.cluster.x-k8s.io
     kind: HetznerCluster
     {{- end }}
     name: {{ include "cluster-name" . }}
-    namespace: {{ .Release.Namespace }}
 {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
 ---
 {{- /*
