@@ -7,6 +7,6 @@ version: 0.10.2
 dependencies:
 - name: cluster
   version: 0.10.1
-  repository: file://../cluster
+  repository: oci://ghcr.io/unbyte-de/cluster-api-cluster-charts
   import-values:
   - data
