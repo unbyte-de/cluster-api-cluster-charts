@@ -32,7 +32,7 @@ hCloud:
     cp:
       type: "cpx32"
       osVersion: "2404"
-      k8sVersion: "v1.31.4"
+      k8sVersion: "v1.35.6"
       # buildTimestamp depends on hcloud project. Define it per cluster.
       buildTimestamp: ""
       imageName: >-
@@ -44,7 +44,7 @@ hCloud:
     worker:
       type: "cpx32"
       osVersion: "2404"
-      k8sVersion: "v1.31.4"
+      k8sVersion: "v1.35.6"
       # buildTimestamp depends on hcloud project. Define it per cluster.
       buildTimestamp: ""
       imageName: >-
@@ -108,7 +108,7 @@ install:
   # enabled: false
   # # This is only in effect if `enabled` is false. Then all resources related for this initial install process will be deleted.
   # deleteAll: true
-  k8sVersion: "v1.31.4"
+  k8sVersion: "v1.35.6"
   envName: dev
   orgName: unbyte
   capiMgtName: capi-mgt
@@ -460,7 +460,7 @@ install:
       chart: argo-cd
       createNamespace: true
       releaseName: argocd
-      version: 8.6.1
+      version: 8.6.4
       namespace: argocd
       values: |-
         crds:
@@ -483,7 +483,7 @@ install:
       repoUrl: https://argoproj.github.io/argo-helm
       chart: argocd-apps
       releaseName: argocd-apps
-      version: 2.0.2
+      version: 2.0.5
       namespace: argocd
       values: |-
         applications:

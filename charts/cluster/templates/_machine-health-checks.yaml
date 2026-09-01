@@ -1,4 +1,13 @@
 {{- define "cluster.machine-health-checks" -}}
+{{- /*
+v1beta2 MachineHealthCheck restructure:
+  spec.maxUnhealthy         -> spec.remediation.triggerIf.unhealthyLessThanOrEqualTo
+  spec.nodeStartupTimeout   -> spec.checks.nodeStartupTimeoutSeconds (int seconds)
+  spec.unhealthyConditions  -> spec.checks.unhealthyNodeConditions (timeout -> timeoutSeconds int)
+  spec.remediationTemplate  -> spec.remediation.templateRef
+Note: remediation.templateRef keeps apiVersion (MachineHealthCheckRemediationTemplateReference),
+it is NOT a ContractVersionedObjectReference, so the HCloudRemediationTemplate ref is unchanged.
+*/}}
 {{- $machines := (include "machines" .) | fromYaml }}
 {{- if $machines.cp.healthCheck.enabled }}
 {{- if and (eq .Values.capi.providers.infrastructure.name "hetzner") $machines.cp.remediation.enabled }}
@@ -19,7 +28,7 @@ spec:
         type: {{ $machines.cp.remediation.type }}
 {{- end }}
 ---
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineHealthCheck
 metadata:
   name: {{ include "cp-name" . }}-unhealthy
@@ -28,20 +37,28 @@ metadata:
     {{- include "cluster.labels" . | nindent 4 }}
 spec:
   clusterName: {{ include "cluster-name" . }}
-  maxUnhealthy: {{ $machines.cp.healthCheck.maxUnhealthy }}
-  nodeStartupTimeout: {{ $machines.cp.healthCheck.nodeStartupTimeout }}
-  {{- if $machines.cp.remediation.enabled }}
-  remediationTemplate:
-    {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
-    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-    kind: HCloudRemediationTemplate
+  checks:
+    nodeStartupTimeoutSeconds: {{ include "cluster.durationToSeconds" $machines.cp.healthCheck.nodeStartupTimeout }}
+    unhealthyNodeConditions:
+    {{- range $machines.cp.healthCheck.unhealthyConditions }}
+    - type: {{ .type }}
+      status: {{ .status | quote }}
+      timeoutSeconds: {{ include "cluster.durationToSeconds" .timeout }}
     {{- end }}
-    name: cp-remediation
-  {{- end }}
+  remediation:
+    {{- if $machines.cp.remediation.enabled }}
+    templateRef:
+      {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: HCloudRemediationTemplate
+      {{- end }}
+      name: cp-remediation
+    {{- end }}
+    triggerIf:
+      unhealthyLessThanOrEqualTo: {{ $machines.cp.healthCheck.maxUnhealthy | quote }}
   selector:
     matchLabels:
       cluster.x-k8s.io/control-plane: ""
-  unhealthyConditions: {{- $machines.cp.healthCheck.unhealthyConditions | toYaml | nindent 2 }}
 {{- end }}
 {{- if $machines.worker.healthCheck.enabled }}
 {{- if and (eq .Values.capi.providers.infrastructure.name "hetzner") $machines.worker.remediation.enabled }}
@@ -62,7 +79,7 @@ spec:
         type: {{ $machines.worker.remediation.type }}
 {{- end }}
 ---
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineHealthCheck
 metadata:
   name: {{ include "cluster-name" . }}-worker-unhealthy
@@ -73,19 +90,27 @@ metadata:
     {{- include "cluster.labels" . | nindent 4 }}
 spec:
   clusterName: {{ include "cluster-name" . }}
-  maxUnhealthy: {{ $machines.worker.healthCheck.maxUnhealthy }}
-  nodeStartupTimeout: {{ $machines.worker.healthCheck.nodeStartupTimeout }}
-  {{- if $machines.worker.remediation.enabled }}
-  remediationTemplate:
-    {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
-    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-    kind: HCloudRemediationTemplate
+  checks:
+    nodeStartupTimeoutSeconds: {{ include "cluster.durationToSeconds" $machines.worker.healthCheck.nodeStartupTimeout }}
+    unhealthyNodeConditions:
+    {{- range $machines.worker.healthCheck.unhealthyConditions }}
+    - type: {{ .type }}
+      status: {{ .status | quote }}
+      timeoutSeconds: {{ include "cluster.durationToSeconds" .timeout }}
     {{- end }}
-    name: worker-remediation
-  {{- end }}
+  remediation:
+    {{- if $machines.worker.remediation.enabled }}
+    templateRef:
+      {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: HCloudRemediationTemplate
+      {{- end }}
+      name: worker-remediation
+    {{- end }}
+    triggerIf:
+      unhealthyLessThanOrEqualTo: {{ $machines.worker.healthCheck.maxUnhealthy | quote }}
   selector:
     matchLabels:
       nodepool: {{ include "worker-name" . }}
-  unhealthyConditions: {{- $machines.worker.healthCheck.unhealthyConditions | toYaml | nindent 2 }}
 {{- end }}
 {{- end -}}

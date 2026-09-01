@@ -147,24 +147,41 @@ joinConfiguration:
     # https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/
     # https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/
     # https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap/kubelet-config
+    {{- /* v1beta2: kubeletExtraArgs is a []Arg list of {name,value} (was map[string]string). */}}
     kubeletExtraArgs:
-      anonymous-auth: "false"
-      authentication-token-webhook: "true"
-      authorization-mode: Webhook
-      cloud-provider: external
-      event-qps: "1"
-      # feature-gates: RotateKubeletServerCertificate=true
-      kubeconfig: /etc/kubernetes/kubelet.conf
-      max-pods: "220"
-      node-labels: "node.kubernetes.io/role=worker"
-      protect-kernel-defaults: "true"
-      read-only-port: "0"
-      rotate-certificates: "true"
-      rotate-server-certificates: "true"
-      seccomp-default: "true"
-      streaming-connection-idle-timeout: "5m"
-      tls-min-version: VersionTLS12
-      tls-cipher-suites: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    - name: anonymous-auth
+      value: "false"
+    - name: authentication-token-webhook
+      value: "true"
+    - name: authorization-mode
+      value: Webhook
+    - name: cloud-provider
+      value: external
+    - name: event-qps
+      value: "1"
+    # feature-gates: RotateKubeletServerCertificate=true
+    - name: kubeconfig
+      value: /etc/kubernetes/kubelet.conf
+    - name: max-pods
+      value: "220"
+    - name: node-labels
+      value: "node.kubernetes.io/role=worker"
+    - name: protect-kernel-defaults
+      value: "true"
+    - name: read-only-port
+      value: "0"
+    - name: rotate-certificates
+      value: "true"
+    - name: rotate-server-certificates
+      value: "true"
+    - name: seccomp-default
+      value: "true"
+    - name: streaming-connection-idle-timeout
+      value: "5m"
+    - name: tls-min-version
+      value: VersionTLS12
+    - name: tls-cipher-suites
+      value: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
   {{- /*
   # https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap/kubelet-config.html?highlight=KubeletConfiguration#use-kubeadms-kubeletconfiguration-patch-target
   # kubectl explain KubeadmControlPlane.spec.kubeadmConfigSpec.joinConfiguration.patches
@@ -278,6 +295,23 @@ files:
 {{- $machines := (include "machines" .) | fromYaml -}}
 {{- $v := $machines.cp.k8sVersion | splitList "." -}}
 {{- printf "%s.%s" (index $v 0) (index $v 1) -}}
+{{- end -}}
+
+{{/*
+Convert a Go duration string (e.g. "15m0s", "3m0s", "40s", "1h30m0s") to an integer number of
+seconds. Used for the CAPI v1beta2 *Seconds fields (MachineHealthCheck), which replaced the
+v1beta1 metav1.Duration string fields. A value that is already a plain integer is passed through.
+*/}}
+{{- define "cluster.durationToSeconds" -}}
+{{- $d := . | toString -}}
+{{- if regexMatch "^[0-9]+$" $d -}}
+{{- $d -}}
+{{- else -}}
+{{- $h := regexFind "[0-9]+h" $d | trimSuffix "h" -}}
+{{- $m := regexFind "[0-9]+m" $d | trimSuffix "m" -}}
+{{- $s := regexFind "[0-9]+s" $d | trimSuffix "s" -}}
+{{- add (mul (int $h) 3600) (mul (int $m) 60) (int $s) -}}
+{{- end -}}
 {{- end -}}
 
 {{/* Check if there is any resource with strategy "ApplyOnce". Used in _cluster-resource-set.yaml */}}

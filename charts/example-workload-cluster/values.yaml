@@ -73,7 +73,7 @@ install:
       chart: argo-cd
       createNamespace: true
       releaseName: argocd
-      version: 8.6.1
+      version: 8.6.4
       namespace: argocd
       values: |-
         crds:
@@ -91,7 +91,7 @@ install:
       repoUrl: https://argoproj.github.io/argo-helm
       chart: argocd-apps
       releaseName: argocd-apps
-      version: 2.0.2
+      version: 2.0.5
       namespace: argocd
       # TODO update URLs after we have an example repo on github
       values: |-
