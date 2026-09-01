@@ -303,7 +303,7 @@ exports:
           #   password: ""
           chart: cilium
           releaseName: cilium
-          version: 1.19.4
+          version: 1.20.1
           namespace: kube-system
           createNamespace: false
           secretsCount: 1
