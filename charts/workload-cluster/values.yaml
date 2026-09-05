@@ -425,7 +425,7 @@ install:
       chart: argo-cd
       createNamespace: true
       releaseName: argocd
-      version: 10.5.0
+      version: 10.8.0
       namespace: argocd
       values: |-
         crds:
