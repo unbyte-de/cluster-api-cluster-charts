@@ -6,7 +6,7 @@ type: application
 version: 0.10.4
 dependencies:
 - name: cluster
-  version: 0.10.2
+  version: 0.11.1
   repository: oci://ghcr.io/unbyte-de/cluster-api-cluster-charts
   import-values:
   - data
