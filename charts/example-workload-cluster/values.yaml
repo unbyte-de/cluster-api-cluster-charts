@@ -29,7 +29,7 @@ hCloud:
     cp:
       type: "cpx22"
       # osVersion: "2404"
-      # k8sVersion: "v1.31.4"
+      # k8sVersion: "v1.35.6"
       # imageName: "cluster-api-ubuntu-<os-version>-<k8s-version>-<timestamp>"
       replicas: 3
       remediation:
@@ -37,7 +37,7 @@ hCloud:
     worker:
       type: "cpx22"
       # osVersion: "2404"
-      # k8sVersion: "v1.31.4"
+      # k8sVersion: "v1.35.6"
       # imageName: "cluster-api-ubuntu-<os-version>-<k8s-version>-<timestamp>"
       replicas: 3
       remediation:

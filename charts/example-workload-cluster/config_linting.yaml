@@ -19,11 +19,11 @@ hCloud:
     # Images must be already created via https://github.com/unbyte-de/cluster-api-machine-images
     cp:
       osVersion: "2404"
-      k8sVersion: "v1.31.4"
-      imageName: "cluster-api-ubuntu-2404-v1.31.4-<timestamp>"
+      k8sVersion: "v1.35.6"
+      imageName: "cluster-api-ubuntu-2404-v1.35.6-<timestamp>"
     worker:
       osVersion: "2404"
-      k8sVersion: "v1.31.4"
-      imageName: "cluster-api-ubuntu-2404-v1.31.4-<timestamp>"
+      k8sVersion: "v1.35.6"
+      imageName: "cluster-api-ubuntu-2404-v1.35.6-<timestamp>"
 install:
-  k8sVersion: "v1.31.4"
+  k8sVersion: "v1.35.6"
