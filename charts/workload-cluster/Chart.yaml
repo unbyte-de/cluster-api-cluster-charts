@@ -3,7 +3,7 @@ apiVersion: v2
 name: workload-cluster
 description: An umbrella chart for a workload (k8s) cluster.
 type: application
-version: 0.11.0
+version: 0.11.3
 dependencies:
 - name: cluster
   version: 0.11.1
