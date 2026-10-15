@@ -3,10 +3,10 @@ apiVersion: v2
 name: workload-cluster
 description: An umbrella chart for a workload (k8s) cluster.
 type: application
-version: 0.11.4
+version: 0.11.3
 dependencies:
 - name: cluster
-  version: 0.11.2
+  version: 0.11.1
   repository: oci://ghcr.io/unbyte-de/cluster-api-cluster-charts
   import-values:
   - data
