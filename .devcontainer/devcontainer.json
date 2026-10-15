@@ -4,7 +4,7 @@
       "dockerfile": "Dockerfile",
       "target": "dev"
     },
-  
+
     "runArgs": [
       // Required for firewall script.
       // These capabilities can only be used by root user, not by the dev user.
@@ -12,7 +12,7 @@
       "--cap-add=NET_ADMIN",
       "--cap-add=NET_RAW"
     ],
-  
+
     "features": {
       // Node — required by Claude Code, not in base image (CI doesn't need it).
       "ghcr.io/devcontainers/features/node:1": {
@@ -21,10 +21,10 @@
       // Claude Code CLI. :1.0 pins feature script, not the CLI.
       "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
     },
-  
+
     // Non-root user created in the Dockerfile's dev stage.
     "remoteUser": "dev",
-  
+
     "mounts": [
       // Using `devcontainerId` to have per-project volume  for ~/.claude (auth + history).
       // Mountpoint is dev-owned thanks to the Dockerfile pre-creating the directory.
@@ -32,13 +32,13 @@
       // "source=devcontainer-pi-config-${devcontainerId},target=/home/dev/.pi,type=volume"
       // "source=${localEnv:HOME}/.claude/.credentials.json,target=/home/dev/.claude/.credentials.json,type=bind,readonly"
     ],
-  
+
     // Venv creation + pre-commit install. No chown needed anymore.
     "postCreateCommand": ".devcontainer/post-create.sh",
     // firewall must be enforced at every container stop&start
     "postStartCommand": "sudo /usr/local/sbin/init-firewall.sh",
     "waitFor": "postStartCommand",
-  
+
     "containerEnv": {
       // Opt out of telemetry.
       "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
