@@ -291,7 +291,7 @@ exports:
         value: cluster-resource-set-install-once
       # https://github.com/unbyte-de/container-images/pkgs/container/container-images%2Fhelm-kubectl
       # TODO renovate
-      jobImage: ghcr.io/unbyte-de/container-images/helm-kubectl:0.1.1@sha256:0bf43774e5d3bef8d992d3fb2dec2e5c482b0a13a2fa975f26f7d85441a0c91d
+      jobImage: ghcr.io/unbyte-de/container-images/helm-kubectl:0.3.0@sha256:70c4d36234ae2655f71559b4fa97feac53c5287c72cbd13f3387a1ca6ff1926f
       # extraRoles:
       resources:
         10-cilium:
