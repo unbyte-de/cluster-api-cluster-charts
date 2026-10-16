@@ -101,10 +101,8 @@ spec:
     {{- with $poolSpec.healthCheck.remediation.triggerIf.unhealthyLessThanOrEqualTo }}
     triggerIf:
       unhealthyLessThanOrEqualTo: {{ . }}
-      {{- end }}
     {{- end }}
-    triggerIf:
-      unhealthyLessThanOrEqualTo: {{ $machines.worker.healthCheck.maxUnhealthy | quote }}
+  {{- end }}
   selector:
     matchLabels:
       nodepool: {{ include "worker-pool-name" $ctx }}
