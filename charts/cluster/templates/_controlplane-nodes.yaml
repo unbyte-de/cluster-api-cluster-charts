@@ -234,7 +234,8 @@ spec:
           value: 2160h0m0s # 90 days. Default is 8760h0m0s (1 year).
         - name: cluster-signing-key-file
           value: /etc/kubernetes/pki/ca.key
-        # feature-gates: RotateKubeletServerCertificate=true,AppArmor=true
+        # - name: feature-gates
+        #   value: RotateKubeletServerCertificate=true,AppArmor=true
         - name: kubeconfig
           value: /etc/kubernetes/controller-manager.conf
         - name: profiling
@@ -294,7 +295,8 @@ spec:
         # This is configured to node IP in postKubeadmCommands.
         - name: bind-address
           value: 0.0.0.0
-        # feature-gates: AppArmor=true
+        # - name: feature-gates
+        #   value: AppArmor=true
         - name: kubeconfig
           value: /etc/kubernetes/scheduler.conf
         - name: profiling
@@ -626,7 +628,8 @@ spec:
           value: external
         - name: event-qps
           value: "1"
-        # feature-gates: RotateKubeletServerCertificate=true
+        # - name: feature-gates
+        #   value: RotateKubeletServerCertificate=true
         - name: kubeconfig
           value: /etc/kubernetes/kubelet.conf
         - name: max-pods
@@ -696,7 +699,8 @@ spec:
           value: external
         - name: event-qps
           value: "1"
-        # feature-gates: RotateKubeletServerCertificate=true
+        # - name: feature-gates
+        #   value: RotateKubeletServerCertificate=true
         - name: kubeconfig
           value: /etc/kubernetes/kubelet.conf
         - name: max-pods

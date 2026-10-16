@@ -69,6 +69,7 @@ _lint-apps:
     for chart in $({{ APP_CHARTS }}); do
         just _lint-chart "$chart"
     done
+
 # Lint a single chart by its path under charts/ (e.g. `just lint-chart workload-cluster`).
 [group('lint')]
 lint-chart CHART: _up
@@ -89,6 +90,7 @@ _lint-chart CHART DEBUG='false':
     else
         yamlfmt -conf=./.yamlfmt -lint -quiet "$out/**/*.{yaml,yml}"
     fi
+
 # Format every YAML in the repo with yamlfmt.
 [group('lint')]
 fmt: _up

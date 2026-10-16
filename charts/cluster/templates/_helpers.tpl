@@ -129,6 +129,7 @@ HCloudMachineTemplate, KubeadmConfigTemplate, MachineHealthCheck, and the
 The pool named "default" is intentionally un-suffixed so it
 matches the legacy single-pool name `<cluster>-worker`. This is what makes
 migrating `machines.worker` → `machines.workers.pools.default` a no-op.
+
 Accepts a {root, poolName, poolSpec} dict (per-pool helper call sites).
 NOTE: poolSpec is not used by this helper.
 */}}
@@ -212,7 +213,6 @@ for a single pool. Accepts a {root, poolName, poolSpec} dict where:
   - .poolName is the pool key (used only in error messages)
   - .poolSpec is the merged pool spec from `cluster.workerPools`
 */}}
-
 {{- define "worker-hcloud-machine-template-spec" -}}
 publicNetwork:
   enableIPv4: true
@@ -241,6 +241,7 @@ capi/imageName: {{ tpl (.poolSpec.imageName | required (printf "ERROR: worker po
 {{/*
 worker-kubeadm-config-template-spec renders the KubeadmConfigTemplate body.
 The body is currently identical across pools (no per-pool kubelet overrides).
+
 Accepts a {root, poolName, poolSpec} dict (per-pool helper call sites).
 NOTE: poolName and poolSpec is not used by this helper.
 */}}
@@ -390,23 +391,6 @@ Accepts a {root, poolName, poolSpec} dict (per-pool helper call sites).
 {{- $machines := (include "machines" .) | fromYaml -}}
 {{- $v := $machines.cp.k8sVersion | splitList "." -}}
 {{- printf "%s.%s" (index $v 0) (index $v 1) -}}
-{{- end -}}
-
-{{/*
-Convert a Go duration string (e.g. "15m0s", "3m0s", "40s", "1h30m0s") to an integer number of
-seconds. Used for the CAPI v1beta2 *Seconds fields (MachineHealthCheck), which replaced the
-v1beta1 metav1.Duration string fields. A value that is already a plain integer is passed through.
-*/}}
-{{- define "cluster.durationToSeconds" -}}
-{{- $d := . | toString -}}
-{{- if regexMatch "^[0-9]+$" $d -}}
-{{- $d -}}
-{{- else -}}
-{{- $h := regexFind "[0-9]+h" $d | trimSuffix "h" -}}
-{{- $m := regexFind "[0-9]+m" $d | trimSuffix "m" -}}
-{{- $s := regexFind "[0-9]+s" $d | trimSuffix "s" -}}
-{{- add (mul (int $h) 3600) (mul (int $m) 60) (int $s) -}}
-{{- end -}}
 {{- end -}}
 
 {{/* Check if there is any resource with strategy "ApplyOnce". Used in _cluster-resource-set.yaml */}}
