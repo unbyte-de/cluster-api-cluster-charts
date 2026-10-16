@@ -9,7 +9,7 @@
 [![Helm](https://img.shields.io/badge/Helm-3.x-0f1689.svg)](https://helm.sh)
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io-181717?logo=github&logoColor=white&label=charts)](https://github.com/orgs/unbyte-de/packages?repo_name=cluster-api-cluster-charts)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-1.31+-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io)
-[![Cluster API](https://img.shields.io/badge/Cluster%20API-v1beta1-326CE5?logo=kubernetes&logoColor=white)](https://cluster-api.sigs.k8s.io/)
+[![Cluster API](https://img.shields.io/badge/Cluster%20API-v1beta2-326CE5?logo=kubernetes&logoColor=white)](https://cluster-api.sigs.k8s.io/)
 [![Hetzner Cloud](https://img.shields.io/badge/Hetzner%20Cloud-D50C2D?logo=hetzner&logoColor=white)](https://www.hetzner.com/cloud)
 [![Kubeadm](https://img.shields.io/badge/Bootstrap-kubeadm-326CE5)](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/)
 <!-- [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE) -->
@@ -37,6 +37,8 @@ These charts define the primary infrastructure and Cluster API specifications.
 
 The `cluster` library chart is designed to be reusable outside of unbyte-specific setups,
 while the application charts provide opinionated defaults used by unbyte.
+
+See the [compatibility documentation](charts/cluster/README.md#compatibility) for supported versions.
 
 | Chart Name | Type | Description |
 | :--- | :--- | :--- |
@@ -68,6 +70,17 @@ These charts are grouped under `charts/helpers`.
 - Charts are designed to work with Cluster API–compatible infrastructure providers.
 - The `example-workload-cluster` chart is **not intended for production use**.
 
+## Versioning
+
+All charts in this repository share a single version number and are released in lockstep.
+Application charts pin the `cluster` library by an exact version constraint (not a `~` or
+`^` range), so library bumps always reach consumers through a coordinated release rather
+than dependency resolution.
+
+When bumping any chart, bump all of them to the same new version in the same PR. The
+release workflow (`.github/workflows/release.yaml`) iterates every `Chart.yaml` and skips
+versions already published to GHCR, so unchanged charts cost nothing in the pipeline.
+
 ## Scope & Non-Goals
 
 ### Scope
@@ -92,12 +105,54 @@ This repository intentionally does **not** include:
 
 Such charts belong in separate, dedicated repositories (e.g. platform add-ons).
 
-## Local Developmemt
+## Development
 
-To run yamlfmt locally:
+Common tasks are wrapped in a [`justfile`](https://just.systems/).
+Run `just` with no arguments to list available recipes.
+
+### Linting
 
 ```sh
-yamlfmt "**/*.{yaml,yml,yamlfmt}"
-# Or remove -quiet and/or -lint flag of yamlfmt in .pre-commit-config.yaml and run
-pre-commit run --all-files
+# yamlfmt across the repo
+just fmt
+# pre-commit run --all-files (requires an activated python venv)
+just pre-commit
+# mirrors .github/workflows/lint.yaml: library chart + all app/helper charts
+just lint
+# just the cluster library chart
+just lint-cluster
+# one chart by its path under charts/
+just lint-chart workload-cluster
+just lint-chart helpers/eso-secrets
 ```
+
+When linting fails,
+
+```sh
+# Let's say failing chart is workload-cluster,
+# run linting in verbose mode to see the diffs
+just exec just _lint-chart workload-cluster true
+```
+
+### devcontainer
+
+Config: [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json)
+
+```sh
+# Start a bash shell inside the devcontainer.
+just bash
+# Stop and remove the devcontainer.
+just destroy
+# Start Claude Code inside the devcontainer.
+just code
+# Run an arbitrary command inside the devcontainer.
+just exec +CMD
+```
+
+Refs:
+* https://containers.dev
+* https://code.claude.com/docs/en/sandbox-environments#dev-containers
+  * https://code.claude.com/docs/en/devcontainer
+  * https://github.com/anthropics/claude-code/tree/main/.devcontainer
+* https://zed.dev/docs/dev-containers
+* https://code.visualstudio.com/docs/devcontainers/containers
