@@ -3,10 +3,10 @@ apiVersion: v2
 name: example-workload-cluster
 description: An example umbrella chart for a workload (k8s) cluster.
 type: application
-version: 0.12.1
+version: 0.11.6
 dependencies:
 - name: cluster
-  version: 0.12.0
-  repository: file://../cluster
+  version: 0.11.2
+  repository: oci://ghcr.io/unbyte-de/cluster-api-cluster-charts
   import-values:
   - data
