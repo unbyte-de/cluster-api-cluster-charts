@@ -2,7 +2,7 @@
 # Stage: base
 # Shared tooling. Used by CI directly (target=base) and as the foundation for the dev stage.
 # ==========================================================================================
-FROM debian:bookworm-slim AS base
+FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8 AS base
 
 ARG HELM_VERSION=3.18.0
 ARG YAMLFMT_VERSION=0.21.0
