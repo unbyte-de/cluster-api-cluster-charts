@@ -463,7 +463,7 @@ install:
       chart: argo-cd
       createNamespace: true
       releaseName: argocd
-      version: 10.8.2
+      version: 10.11.1
       namespace: argocd
       values: |-
         crds:
