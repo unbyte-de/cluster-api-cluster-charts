@@ -16,7 +16,7 @@
     "features": {
       // Node — required by Claude Code, not in base image (CI doesn't need it).
       "ghcr.io/devcontainers/features/node:1": {
-        "version": "22"
+        "version": "26"
       },
       // Claude Code CLI. :1.0 pins feature script, not the CLI.
       "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
