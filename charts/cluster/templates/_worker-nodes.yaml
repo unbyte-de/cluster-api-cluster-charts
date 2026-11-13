@@ -4,7 +4,54 @@
 {{- $workerPools := (include "cluster.workerPools" .) | fromYaml }}
 {{- range $poolName, $poolSpec := $workerPools }}
 {{- $ctx := dict "root" $root "poolName" $poolName "poolSpec" $poolSpec }}
+{{- $bareMetal := dig "bareMetal" "enabled" false $poolSpec }}
 {{- if eq $root.Values.capi.providers.infrastructure.name "hetzner" }}
+{{- if $bareMetal }}
+{{- range $host := $poolSpec.bareMetal.hosts }}
+---
+{{/*
+https://syself.com/docs/caph/reference/hetzner-bare-metal-host
+NOTE: CAPH keeps the host's provisioning state in spec.status (not status).
+Never replace or force-sync this object, that wipes the state.
+*/}}
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: HetznerBareMetalHost
+metadata:
+  name: {{ printf "%s-%d" (include "worker-pool-name" $ctx) ($host.serverID | required (printf "ERROR: bare-metal worker pool %q: every host needs a serverID." $poolName) | int64) }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "cluster.labels" $root | nindent 4 }}
+    {{- include "worker-bare-metal-host-selector-labels" $ctx | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  serverID: {{ $host.serverID | int64 }}
+  {{- with $host.rootDeviceHints }}
+  rootDeviceHints: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  maintenanceMode: {{ $host.maintenanceMode | default false }}
+  {{- with $host.description }}
+  description: {{ . | quote }}
+  {{- end }}
+{{- end }}
+---
+{{/*
+https://syself.com/docs/caph/reference/hetzner-bare-metal-machine-template
+*/}}
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: HetznerBareMetalMachineTemplate
+metadata:
+  name: {{ include "worker-bare-metal-machine-template-name" $ctx }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "cluster.labels" $root | nindent 4 }}
+    {{- include "worker-bare-metal-machine-template-labels" $ctx | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  template:
+    spec: {{- include "worker-bare-metal-machine-template-spec" $ctx | nindent 6 }}
+{{- else }}
 ---
 {{/*
 https://syself.com/docs/caph/reference/hcloud-machine-template
@@ -22,6 +69,7 @@ metadata:
 spec:
   template:
     spec: {{- include "worker-hcloud-machine-template-spec" $ctx | nindent 6 }}
+{{- end }}
 {{- end }}
 {{- if eq $root.Values.capi.providers.bootstrap.name "kubeadm" }}
 ---
@@ -72,6 +120,15 @@ spec:
   # # rollout allows you to configure the behaviour of rolling updates to the MachineDeployment Machines.
   # rollout:
   */}}
+  {{- if $bareMetal }}
+  {{- /*
+  A bare-metal pool can't surge: there's no spare server for an extra Machine, so the rollout would hang.
+  */}}
+  rollout:
+    strategy:
+      type: RollingUpdate
+      rollingUpdate: {{- toYaml ($poolSpec.bareMetal.rollingUpdate | required (printf "ERROR: bare-metal worker pool %q rollingUpdate is required." $poolName)) | nindent 8 }}
+  {{- end }}
   template:
     metadata:
       labels:
@@ -94,9 +151,14 @@ spec:
       infrastructureRef:
         {{- if eq $root.Values.capi.providers.infrastructure.name "hetzner" }}
         apiGroup: infrastructure.cluster.x-k8s.io
+        {{- if $bareMetal }}
+        kind: HetznerBareMetalMachineTemplate
+        name: {{ include "worker-bare-metal-machine-template-name" $ctx }}
+        {{- else }}
         kind: HCloudMachineTemplate
-        {{- end }}
         name: {{ include "worker-hcloud-machine-template-name" $ctx }}
+        {{- end }}
+        {{- end }}
       version: {{ $poolSpec.k8sVersion | required (printf "ERROR: worker pool %q k8sVersion is required" $poolName) }}
 {{- end }}
 {{- end -}}

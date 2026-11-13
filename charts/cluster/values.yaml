@@ -57,6 +57,7 @@ exports:
               unhealthyLessThanOrEqualTo: 100%
       # Multi-pool worker config.
       # Each entry under `pools` becomes its own MachineDeployment + HCloudMachineTemplate + KubeadmConfigTemplate (+ MachineHealthCheck).
+      # Bare-metal pools render HetznerBareMetalHosts + a HetznerBareMetalMachineTemplate instead, see `hCloud.machines.workers.defaults.bareMetal`.
       # `defaults` is merged into every pool; per-pool fields win.
       workers:
         defaults:
@@ -71,6 +72,16 @@ exports:
             enabled: false
             minSize: ""
             maxSize: ""
+          # Extra node labels and taints, set by kubeadm when a node joins (nodeRegistration), so changing them replaces the pool's nodes.
+          # Every worker also gets `node.kubernetes.io/role=worker`. kubelets can't set most labels in the kubernetes.io and k8s.io namespaces.
+          nodeLabels: {}
+          # nodeLabels:
+          #   nodepool: gpu
+          nodeTaints: []
+          # nodeTaints:
+          # - key: nvidia.com/gpu
+          #   value: present
+          #   effect: NoSchedule
           healthCheck:
             enabled: true
             checks:
@@ -107,6 +118,22 @@ exports:
       # https://syself.com/docs/caph/topics/managing-ssh-keys
       sshKeys:
       # - "name"
+      # Dedicated (Robot) servers. Only used if at least one worker pool has `bareMetal.enabled: true`.
+      robot:
+        # Secret with the SSH key CAPH uses to log in to the rescue system (HetznerCluster.spec.sshKeys.robotRescueSecretRef).
+        # Bare-metal pools use the same secret after installimage by default (`bareMetal.sshSpec`).
+        # The key name stored under `key.name` must match a key in Robot (Server > Key Management).
+        rescueSshSecretRef:
+          name: robot-ssh
+          key:
+            name: sshkey-name
+            publicKey: ssh-publickey
+            privateKey: ssh-privatekey
+        # Give bare-metal nodes the `hrobot://<server-id>` ProviderID instead of CAPH's default `hcloud://bm-<server-id>`.
+        # The CCM must set the same format, or new nodes never join: the upstream hcloud-cloud-controller-manager always uses
+        # `hrobot://`, Syself's fork (syself/hetzner-cloud-controller-manager >= v2.0.6) only with HCLOUD_USE_HROBOT_PROVIDER_ID_FOR_BAREMETAL=true.
+        # https://syself.com/docs/caph/topics/baremetal/creating-workload-cluster
+        useHrobotProviderID: true
       token:
         # If true (default, recommended), the chart references an existing Secret
         # by `secretName` and you create it out of band (ExternalSecrets, sealed
@@ -206,6 +233,118 @@ exports:
               retryLimit: 3
               timeout: 3m0s
               type: Reboot
+            # Bare-metal pool: Hetzner dedicated (Robot) servers instead of hcloud servers.
+            # https://syself.com/docs/caph/topics/baremetal/introduction
+            # If enabled, the pool renders one HetznerBareMetalHost per entry in `hosts` and a HetznerBareMetalMachineTemplate
+            # instead of an HCloudMachineTemplate. `type`, `placementGroupName` and `imageName` are ignored for such a pool,
+            # and so is `remediation` (HCloudRemediationTemplate), see `bareMetal.remediation`. The autoscaler can't be enabled.
+            bareMetal:
+              enabled: false
+              # One HetznerBareMetalHost per dedicated server. The pool's machines claim them via hostSelector,
+              # so `replicas` must not be higher than the number of hosts.
+              # https://syself.com/docs/caph/reference/hetzner-bare-metal-host
+              hosts: []
+              # - serverID: 1234567 # Server ID from the Robot dashboard.
+              #   # Disks to install on. Leave it out on the first sync: CAPH registers the host and waits,
+              #   # then `kubectl describe hetznerbaremetalhost` shows the WWNs under hardwareDetails.storage.
+              #   # Single disk: `wwn: "<wwn>"`. Software RAID (installImage.swraid: 1): `raid.wwn: ["<wwn>", "<wwn>"]`.
+              #   rootDeviceHints:
+              #     raid:
+              #       wwn:
+              #       - "eui.0025388a21b0a1b2"
+              #       - "eui.0025388a21b0a1b3"
+              #   # Set to true (and sync) before removing a host from this list: the host deprovisions and isn't claimed anymore.
+              #   maintenanceMode: false
+              #   description: ""
+              # https://syself.com/docs/caph/reference/hetzner-bare-metal-machine-template
+              installImage:
+                image:
+                  # Image from Hetzner's NFS share in the rescue system, see `ls /root/.oldroot/nfs/images/`.
+                  path: /root/.oldroot/nfs/images/Ubuntu-2404-noble-amd64-base.tar.zst
+                # Software RAID1 across the disks in the host's `rootDeviceHints.raid.wwn`.
+                swraid: 1
+                swraidLevel: 1
+                partitions:
+                - fileSystem: esp
+                  mount: /boot/efi
+                  size: 512M
+                - fileSystem: ext4
+                  mount: /boot
+                  size: 1024M
+                - fileSystem: ext4
+                  mount: /
+                  size: all
+                # Runs inside the new system after installimage. If `nodeSetup.enabled`, the chart appends the node setup to it.
+                # CAPH bootstraps the node with cloud-init, which Hetzner's base image doesn't ship (taken from the upstream CAPH template).
+                postInstallScript: |
+                  #!/bin/bash
+                  set -Eeuo pipefail
+                  # Keep the network config written by installimage.
+                  mkdir -p /etc/cloud/cloud.cfg.d
+                  echo "network: { config: disabled }" > /etc/cloud/cloud.cfg.d/99-custom-networking.cfg
+                  apt-get update
+                  apt-get install -y cloud-init apparmor apparmor-utils
+                  cloud-init clean --logs
+              # Node setup that the chart appends to `installImage.postInstallScript`. It gives a dedicated server what
+              # our hcloud images get from image-builder v0.1.48 and https://github.com/unbyte-de/cluster-api-machine-images:
+              # baseline packages, cloud-init ordered after containerd, containerd and runc from upstream releases,
+              # kubelet, kubeadm and kubectl at the pool's `k8sVersion` plus cri-tools and kubernetes-cni from pkgs.k8s.io,
+              # kernel modules, sysctls, no swap, yq, and all packages held. See `worker-bare-metal-node-setup` in _helpers.tpl.
+              # When bumping `k8sVersion`, keep these versions in line with config/vars/k8s-<minor>.json in that repo.
+              # Changing any of this (or `k8sVersion`) renders a new template, so the servers get reinstalled.
+              nodeSetup:
+                enabled: true
+                # Package revision on pkgs.k8s.io, e.g. k8sVersion v1.36.5 -> kubelet=1.36.5-1.1.
+                kubernetesDebRevision: "1.1"
+                # Must be >= 2.0.0 (the generated config.toml uses config version 3).
+                containerdVersion: "2.3.7"
+                runcVersion: "1.2.8"
+                pauseImage: registry.k8s.io/pause:3.10
+                # Same as config/scripts/additional-tools.sh in cluster-api-machine-images (amd64 binary).
+                yq:
+                  version: v4.49.2
+                  sha256: be2c0ddcf426b6a231648610ec5d1666ae50e9f6473e82f6486f9f4cb6e3e2f7
+              # Secret with the SSH key CAPH uses to log in to the server after installimage.
+              sshSpec:
+                portAfterInstallImage: 22
+                secretRef:
+                  name: robot-ssh
+                  key:
+                    name: sshkey-name
+                    publicKey: ssh-publickey
+                    privateKey: ssh-privatekey
+              # Merged over the pool's `healthCheck`. A dedicated server takes much longer than an hcloud server to come up
+              # (rescue boot, installimage, node setup, reboot) and to reboot.
+              healthCheck:
+                checks:
+                  nodeStartupTimeoutSeconds: 3600 # 1 hour
+                  unhealthyNodeConditions:
+                  - type: Ready
+                    status: Unknown
+                    timeoutSeconds: 300
+                  - type: Ready
+                    status: "False"
+                    timeoutSeconds: 300
+              # Used instead of the pool's `remediation`: the MachineHealthCheck reboots an unhealthy server through the Robot API
+              # (HetznerBareMetalRemediationTemplate). Disabled, it deletes the Machine, which reinstalls the server and wipes its disks.
+              # https://syself.com/docs/caph/reference/hetzner-bare-metal-remediation-template
+              remediation:
+                enabled: true
+                type: Reboot
+                retryLimit: 2
+                # How long to wait for the node to become healthy after one reboot.
+                timeout: 20m
+                # If the server needs remediation again within this time after a successful reboot,
+                # CAPH skips the reboot and deletes the Machine (reinstall). "0s" turns this off.
+                cooldown: 30m
+                # When the retries run out: "Reuse" deletes the Machine and reinstalls the server,
+                # "Retire" keeps the host out of the pool until someone removes its capi.syself.com/permanent-error annotation.
+                onExhaustion: Reuse
+              # MachineDeployment rollout. Without a spare server there's nowhere to create a new Machine first,
+              # so a rollout deletes one Machine (reinstalling its server) and then provisions it again.
+              rollingUpdate:
+                maxSurge: 0
+                maxUnavailable: 1
           pools: {}
           # pools:
           #   # The pool named "default" renders with un-suffixed resource names (`<cluster>-worker`) so it lines up with the legacy `hCloud.machines.worker:` block.
