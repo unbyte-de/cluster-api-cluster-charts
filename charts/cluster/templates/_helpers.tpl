@@ -93,6 +93,16 @@ NODEIP=$(curl -fsS --max-time 5 --retry 3 --retry-delay 2 http://169.254.169.254
 {{- end }}
 
 {{/*
+fetchNodeIpFromDefaultRoute is fetchNodeIp for dedicated (Robot) servers, which have no metadata service.
+It sets NODEIP to the source IPv4 of the default route, which on a dedicated server is its public IPv4
+(on the NIC itself, no NAT). `ip route get` only looks up the route, it doesn't send anything to 1.1.1.1.
+Fails instead of continuing with an empty IP. Stays single-line for the same reason as fetchNodeIp.
+*/}}
+{{- define "cluster.fetchNodeIpFromDefaultRoute" -}}
+NODEIP=$(ip -4 route get 1.1.1.1 | sed -n 's/.* src \([0-9.]*\).*/\1/p'); [ -n "$NODEIP" ] || { echo "ERROR: no IPv4 source address on the default route" >&2; exit 1; }
+{{- end }}
+
+{{/*
 Merge hCloud.networking with networking. hCloud.networking overwrites.
 */}}
 {{- define "networking" -}}
@@ -202,8 +212,33 @@ It accepts machines.workers.{defaults,pools} + hCloud.machines.workers.{defaults
     {{- fail (printf "worker pool %q produces resource name %q which exceeds 63 chars once the 17-char spec-hash suffix is appended; shorten the cluster name or pool name" $k $base) -}}
   {{- end -}}
 {{- end -}}
+{{- /* Validate bare-metal pools */}}
+{{- range $k, $p := $out -}}
+  {{- if dig "bareMetal" "enabled" false $p -}}
+    {{- if dig "autoscaler" "enabled" false $p -}}
+      {{- fail (printf "worker pool %q is a bare-metal pool, which can't be autoscaled (CAPI can't order servers); set autoscaler.enabled to false" $k) -}}
+    {{- end -}}
+    {{- $hosts := dig "bareMetal" "hosts" (list) $p -}}
+    {{- if gt (int $p.replicas) (len $hosts) -}}
+      {{- fail (printf "worker pool %q has replicas %d but only %d bare-metal hosts; add hosts or lower replicas" $k (int $p.replicas) (len $hosts)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 {{- end -}}
 {{- $out | toYaml -}}
+{{- end }}
+
+{{/*
+cluster.hasBareMetalPools returns "true" if at least one worker pool is a bare-metal pool, "false" otherwise.
+*/}}
+{{- define "cluster.hasBareMetalPools" -}}
+{{- $found := false -}}
+{{- range $_, $p := (include "cluster.workerPools" .) | fromYaml -}}
+  {{- if dig "bareMetal" "enabled" false $p -}}
+    {{- $found = true -}}
+  {{- end -}}
+{{- end -}}
+{{- $found -}}
 {{- end }}
 
 {{/*
@@ -239,13 +274,213 @@ capi/imageName: {{ tpl (.poolSpec.imageName | required (printf "ERROR: worker po
 {{- end }}
 
 {{/*
+worker-bare-metal-host-selector-labels renders the label that ties a bare-metal pool's
+HetznerBareMetalHosts to the hostSelector of its HetznerBareMetalMachineTemplate.
+Accepts a {root, poolName, poolSpec} dict (per-pool helper call sites).
+NOTE: poolSpec is not used by this helper.
+*/}}
+{{- define "worker-bare-metal-host-selector-labels" -}}
+capi/worker-pool: {{ include "worker-pool-name" . }}
+{{- end }}
+{{/*
+worker-bare-metal-machine-template-spec renders the HetznerBareMetalMachineTemplate.spec.template.spec
+for a single bare-metal pool. Accepts a {root, poolName, poolSpec} dict (per-pool helper call sites).
+*/}}
+{{- define "worker-bare-metal-machine-template-spec" -}}
+{{- $bareMetal := .poolSpec.bareMetal -}}
+{{- $installImage := deepCopy ($bareMetal.installImage | required (printf "ERROR: bare-metal worker pool %q installImage is required." .poolName)) -}}
+{{- if dig "nodeSetup" "enabled" false $bareMetal -}}
+{{- $_ := set $installImage "postInstallScript" (printf "%s\n%s" ($installImage.postInstallScript | default "#!/bin/bash" | trimSuffix "\n") (include "worker-bare-metal-node-setup" .)) -}}
+{{- end -}}
+hostSelector:
+  matchLabels:
+    {{- include "worker-bare-metal-host-selector-labels" . | nindent 4 }}
+installImage: {{- toYaml $installImage | nindent 2 }}
+sshSpec: {{- toYaml ($bareMetal.sshSpec | required (printf "ERROR: bare-metal worker pool %q sshSpec is required." .poolName)) | nindent 2 }}
+{{- end }}
+{{/*
+worker-bare-metal-node-setup renders the bash that `bareMetal.nodeSetup` appends to the installimage
+post-install script. It gives a dedicated server what our hcloud images get from image-builder v0.1.48
+(roles setup, node, providers/hcloud, containerd, kubernetes and sysprep)
+and from https://github.com/unbyte-de/cluster-api-machine-images (yq).
+Left out on purpose:
+- hypervisor guest tools (open-vm-tools, linux-*-tools-virtual, linux-cloud-tools-generic, hv-kvp-daemon),
+- etcd network tuning (only control-plane nodes run etcd),
+- kubeadm image pre-pull (containerd doesn't run during installimage),
+- image templating resets (machine-id, SSH host keys, netplan, cloud-init state), which would break an installed server,
+- cloud-init's timestamped output logging and the grub console settings for cloud images,
+- the Harbor proxy-cache config in containerd's certs.d, because it needs registry credentials.
+It runs inside the freshly installed system (chroot), so it only installs packages and writes config.
+Kernel modules and sysctls take effect on the first boot, before kubelet starts.
+Accepts a {root, poolName, poolSpec} dict (per-pool helper call sites).
+*/}}
+{{- define "worker-bare-metal-node-setup" -}}
+{{- $nodeSetup := .poolSpec.bareMetal.nodeSetup -}}
+{{- $k8sVersion := .poolSpec.k8sVersion | required (printf "ERROR: worker pool %q k8sVersion is required" .poolName) | trimPrefix "v" -}}
+{{- $k8sParts := splitList "." $k8sVersion -}}
+{{- if not (semverCompare ">=2.0.0" $nodeSetup.containerdVersion) -}}
+{{- fail (printf "ERROR: worker pool %q: bareMetal.nodeSetup.containerdVersion must be >= 2.0.0" .poolName) -}}
+{{- end -}}
+# Node setup, rendered by the cluster chart (bareMetal.nodeSetup).
+set -Eeuo pipefail
+export DEBIAN_FRONTEND=noninteractive
+K8S_VERSION="v{{ $k8sVersion }}"
+K8S_SERIES="v{{ index $k8sParts 0 }}.{{ index $k8sParts 1 }}"
+K8S_DEB_VERSION="{{ $k8sVersion }}-{{ $nodeSetup.kubernetesDebRevision }}"
+CONTAINERD_VERSION="{{ $nodeSetup.containerdVersion }}"
+RUNC_VERSION="{{ $nodeSetup.runcVersion }}"
+YQ_VERSION="{{ $nodeSetup.yq.version }}"
+YQ_SHA256="{{ $nodeSetup.yq.sha256 }}"
+# setup: dist-upgrade and baseline packages.
+apt-get update
+apt-get dist-upgrade -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold
+apt-get install -y auditd apt-transport-https ca-certificates conntrack chrony curl ebtables jq gnupg \
+  libnetfilter-acct1 libnetfilter-cttimeout1 libnetfilter-log1 python3-netifaces python3-pip socat
+# providers (hcloud): cloud-init, tools and CSI prerequisites.
+apt-get install -y cloud-init cloud-guest-utils cloud-initramfs-copymods cloud-initramfs-dyn-netconf linux-tools-generic \
+  nfs-common open-iscsi lvm2 xfsprogs
+systemctl enable iscsid.service
+systemctl enable cloud-init-local.service cloud-init.service cloud-config.service cloud-final.service
+# cloud-init runs the kubeadm join in its final stage, so its config and final stages wait for containerd.
+for unit in cloud-config cloud-final; do
+  mkdir -p "/etc/systemd/system/${unit}.service.d"
+  printf '[Unit]\nAfter=containerd.service\nWants=containerd.service\n' > "/etc/systemd/system/${unit}.service.d/boot-order.conf"
+done
+echo "ERROR_ON_USER_DATA_FAILURE = False" > /usr/lib/python3/dist-packages/cloudinit/feature_overrides.py
+# node: no automatic apt runs, kernel modules, sysctls, no swap, auditd.
+systemctl mask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service
+# kubelet runs with protect-kernel-defaults and doesn't start without the vm.* and kernel.* values.
+cat > /etc/modules-load.d/kubernetes.conf <<'EOF'
+overlay
+br_netfilter
+EOF
+cat > /etc/sysctl.d/99-kubernetes.conf <<'EOF'
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward = 1
+net.ipv6.conf.all.forwarding = 1
+net.ipv6.conf.all.disable_ipv6 = 0
+net.ipv4.tcp_congestion_control = bbr
+net.ipv4.conf.all.rp_filter = 1
+vm.overcommit_memory = 1
+vm.panic_on_oom = 0
+kernel.panic = 10
+kernel.panic_on_oops = 1
+kernel.keys.root_maxkeys = 1000000
+kernel.keys.root_maxbytes = 25000000
+fs.inotify.max_user_instances = 8192
+fs.inotify.max_user_watches = 524288
+EOF
+sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+systemctl enable auditd.service
+# containerd: containerd and runc from upstream releases.
+cd /tmp
+curl -fsSLO "https://github.com/containerd/containerd/releases/download/v${CONTAINERD_VERSION}/containerd-${CONTAINERD_VERSION}-linux-amd64.tar.gz"
+curl -fsSLO "https://github.com/containerd/containerd/releases/download/v${CONTAINERD_VERSION}/containerd-${CONTAINERD_VERSION}-linux-amd64.tar.gz.sha256sum"
+sha256sum -c "containerd-${CONTAINERD_VERSION}-linux-amd64.tar.gz.sha256sum"
+tar -C /usr/local -xzf "containerd-${CONTAINERD_VERSION}-linux-amd64.tar.gz"
+curl -fsSL -o /etc/systemd/system/containerd.service "https://raw.githubusercontent.com/containerd/containerd/v${CONTAINERD_VERSION}/containerd.service"
+curl -fsSLO "https://github.com/opencontainers/runc/releases/download/v${RUNC_VERSION}/runc.amd64"
+curl -fsSLO "https://github.com/opencontainers/runc/releases/download/v${RUNC_VERSION}/runc.sha256sum"
+grep ' runc.amd64$' runc.sha256sum | sha256sum -c -
+install -m 0755 runc.amd64 /usr/local/sbin/runc
+mkdir -p /etc/containerd/certs.d /etc/containerd/conf.d /etc/systemd/system/containerd.service.d
+cat > /etc/containerd/config.toml <<'EOF'
+version = 3
+imports = ["/etc/containerd/conf.d/*.toml"]
+[plugins]
+  [plugins.'io.containerd.cri.v1.images'.pinned_images]
+    sandbox = "{{ $nodeSetup.pauseImage }}"
+  [plugins.'io.containerd.cri.v1.images'.registry]
+    config_path = '/etc/containerd/certs.d'
+  [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc]
+    runtime_type = 'io.containerd.runc.v2'
+  [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc.options]
+    SystemdCgroup = true
+EOF
+cat > /etc/systemd/system/containerd.service.d/memory-pressure.conf <<'EOF'
+[Service]
+OOMScoreAdjust=-999
+EOF
+cat > /etc/systemd/system/containerd.service.d/max-tasks.conf <<'EOF'
+[Service]
+TasksMax=infinity
+EOF
+echo "runtime-endpoint: unix:///var/run/containerd/containerd.sock" > /etc/crictl.yaml
+ln -sf /usr/local/bin/ctr /usr/bin/ctr
+systemctl enable containerd.service
+# kubernetes: kubelet, kubeadm, kubectl, cri-tools (crictl) and kubernetes-cni from pkgs.k8s.io.
+mkdir -p /etc/apt/keyrings
+curl -fsSL "https://pkgs.k8s.io/core:/stable:/${K8S_SERIES}/deb/Release.key" | gpg --batch --yes --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${K8S_SERIES}/deb/ /" > /etc/apt/sources.list.d/kubernetes.list
+apt-get update
+apt-get install -y "kubelet=${K8S_DEB_VERSION}" "kubeadm=${K8S_DEB_VERSION}" "kubectl=${K8S_DEB_VERSION}" cri-tools kubernetes-cni
+apt-mark hold kubelet kubeadm kubectl
+systemctl enable kubelet.service
+echo "KUBELET_EXTRA_ARGS=" > /etc/default/kubelet
+printf '%s' "${K8S_VERSION}" > /etc/kubernetes-version
+mkdir -p /usr/share/bash-completion/completions
+for cmd in kubectl kubeadm crictl; do
+  "${cmd}" completion bash > "/usr/share/bash-completion/completions/${cmd}"
+done
+cat > /etc/profile.d/kubernetes.sh <<'EOF'
+# shellcheck shell=sh disable=SC2166,SC2157,SC3044
+# Check for interactive bash
+if [ "x${BASH_VERSION-}" != x -a "x${PS1-}" ]; then
+  ADMIN_CONF=/etc/kubernetes/admin.conf
+  SUPER_ADMIN_CONF=/etc/kubernetes/super-admin.conf
+  if [ -r "${SUPER_ADMIN_CONF}" ]; then
+    export KUBECONFIG="${SUPER_ADMIN_CONF}"
+  elif [ -r "${ADMIN_CONF}" ]; then
+    export KUBECONFIG="${ADMIN_CONF}"
+  fi
+  alias k=kubectl
+  __load_completion kubectl >/dev/null 2>&1 || true
+  complete -F __start_kubectl k 2>/dev/null || true
+fi
+EOF
+# cluster-api-machine-images: yq.
+curl -fsSL -o /usr/bin/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+echo "${YQ_SHA256}  /usr/bin/yq" | sha256sum -c -
+chmod 0755 /usr/bin/yq
+# sysprep: clean up apt and hold all installed packages, so nothing gets upgraded on the node.
+apt-get autoremove -y
+apt-get clean
+rm -rf /var/lib/apt/lists/*
+# Only installed ones: chrony replaces systemd-timesyncd, which stays known to dpkg with its config files.
+dpkg-query -W -f '${db:Status-Status} ${binary:Package}\n' | awk '$1 == "installed" { print $2 }' | xargs apt-mark hold >/dev/null
+{{- end }}
+{{/*
+Accepts a {root, poolName, poolSpec} dict (per-pool helper call sites).
+*/}}
+{{- define "worker-bare-metal-machine-template-name" -}}
+{{- printf "%s-%s" (include "worker-pool-name" .) ((include "worker-bare-metal-machine-template-spec" .) | sha256sum | trunc 16) }}
+{{- end }}
+{{/*
+Accepts a {root, poolName, poolSpec} dict (per-pool helper call sites).
+*/}}
+{{- define "worker-bare-metal-machine-template-labels" -}}
+{{- with .poolSpec.osVersion -}}
+capi/osVersion: {{ . | quote }}
+{{- end }}
+capi/k8sVersion: {{ .poolSpec.k8sVersion | required (printf "ERROR: worker pool %q k8sVersion is required" .poolName) | quote }}
+{{- end }}
+
+{{/*
 worker-kubeadm-config-template-spec renders the KubeadmConfigTemplate body.
-The body is currently identical across pools (no per-pool kubelet overrides).
+Pools differ only in their node labels and taints (`nodeLabels`, `nodeTaints`),
+and bare-metal pools in how postKubeadmCommands finds the node IP.
 
 Accepts a {root, poolName, poolSpec} dict (per-pool helper call sites).
-NOTE: poolName and poolSpec is not used by this helper.
+NOTE: poolName is not used by this helper.
 */}}
 {{- define "worker-kubeadm-config-template-spec" -}}
+{{- $bareMetal := dig "bareMetal" "enabled" false .poolSpec -}}
+{{- $nodeLabels := list "node.kubernetes.io/role=worker" -}}
+{{- range $k, $v := (.poolSpec.nodeLabels | default dict) -}}
+{{- $nodeLabels = append $nodeLabels (printf "%s=%v" $k $v) -}}
+{{- end -}}
+{{- $nodeTaints := .poolSpec.nodeTaints -}}
 {{- with .root -}}
 joinConfiguration:
   nodeRegistration:
@@ -272,7 +507,7 @@ joinConfiguration:
     - name: max-pods
       value: "220"
     - name: node-labels
-      value: "node.kubernetes.io/role=worker"
+      value: {{ join "," $nodeLabels | quote }}
     - name: protect-kernel-defaults
       value: "true"
     - name: read-only-port
@@ -289,6 +524,9 @@ joinConfiguration:
       value: VersionTLS12
     - name: tls-cipher-suites
       value: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+    {{- with $nodeTaints }}
+    taints: {{- toYaml . | nindent 4 }}
+    {{- end }}
   {{- /*
   # https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap/kubelet-config.html?highlight=KubeletConfiguration#use-kubeadms-kubeletconfiguration-patch-target
   # kubectl explain KubeadmControlPlane.spec.kubeadmConfigSpec.joinConfiguration.patches
@@ -351,7 +589,11 @@ files:
     echo "postKubeadmCommands started!"
 
     {{- if .Values.kubeadm.setKubeletNodeIp }}
+    {{- if $bareMetal }}
+    {{- include "cluster.fetchNodeIpFromDefaultRoute" . | nindent 4 }}
+    {{- else }}
     {{- include "cluster.fetchNodeIp" . | nindent 4 }}
+    {{- end }}
     echo "$NODEIP"
     sed -i "/--node-ip/d" /var/lib/kubelet/kubeadm-flags.env
     echo "KUBELET_KUBEADM_ARGS=\"--node-ip=$NODEIP $(cat /var/lib/kubelet/kubeadm-flags.env \

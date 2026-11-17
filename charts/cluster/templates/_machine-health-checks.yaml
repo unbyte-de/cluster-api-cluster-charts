@@ -56,11 +56,25 @@ spec:
 {{- $ctx := dict "root" $root "poolName" $poolName "poolSpec" $poolSpec }}
 {{- $remediationName := "" }}
 {{- if eq $poolName "default" -}}{{- $remediationName = "worker-remediation" -}}{{- else -}}{{- $remediationName = printf "worker-%s-remediation" $poolName -}}{{- end }}
-{{- if $poolSpec.healthCheck.enabled }}
-{{- if and (eq $root.Values.capi.providers.infrastructure.name "hetzner") $poolSpec.remediation.enabled }}
+{{- /*
+Bare-metal pools use their own health-check timeouts (`bareMetal.healthCheck`) and reboot unhealthy servers
+through the Robot API (`bareMetal.remediation`, HetznerBareMetalRemediationTemplate).
+The pool's `remediation` (HCloudRemediationTemplate) is ignored for them.
+*/}}
+{{- $bareMetal := dig "bareMetal" "enabled" false $poolSpec }}
+{{- $healthCheck := $poolSpec.healthCheck }}
+{{- $remediation := $poolSpec.remediation }}
+{{- $remediationKind := "HCloudRemediationTemplate" }}
+{{- if $bareMetal }}
+{{- $healthCheck = mustMergeOverwrite (deepCopy $poolSpec.healthCheck) ($poolSpec.bareMetal.healthCheck | default dict) }}
+{{- $remediation = $poolSpec.bareMetal.remediation | default dict }}
+{{- $remediationKind = "HetznerBareMetalRemediationTemplate" }}
+{{- end }}
+{{- if $healthCheck.enabled }}
+{{- if and (eq $root.Values.capi.providers.infrastructure.name "hetzner") $remediation.enabled }}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-kind: HCloudRemediationTemplate
+kind: {{ $remediationKind }}
 metadata:
   name: {{ $remediationName }}
   namespace: {{ $root.Release.Namespace }}
@@ -70,9 +84,17 @@ spec:
   template:
     spec:
       strategy:
-        retryLimit: {{ $poolSpec.remediation.retryLimit }}
-        timeout: {{ $poolSpec.remediation.timeout }}
-        type: {{ $poolSpec.remediation.type }}
+        {{- if $bareMetal }}
+        {{- with $remediation.cooldown }}
+        cooldown: {{ . }}
+        {{- end }}
+        {{- with $remediation.onExhaustion }}
+        onExhaustion: {{ . }}
+        {{- end }}
+        {{- end }}
+        retryLimit: {{ $remediation.retryLimit }}
+        timeout: {{ $remediation.timeout }}
+        type: {{ $remediation.type }}
 {{- end }}
 ---
 apiVersion: cluster.x-k8s.io/v1beta2
@@ -86,19 +108,19 @@ metadata:
     {{- include "cluster.labels" $root | nindent 4 }}
 spec:
   clusterName: {{ include "cluster-name" $root }}
-  {{- with $poolSpec.healthCheck.checks }}
+  {{- with $healthCheck.checks }}
   checks:
     {{- . | toYaml | nindent 4 }}
   {{- end }}
-  {{- if $poolSpec.remediation.enabled }}
+  {{- if $remediation.enabled }}
   remediation:
     templateRef:
       {{- if eq $root.Values.capi.providers.infrastructure.name "hetzner" }}
       apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-      kind: HCloudRemediationTemplate
+      kind: {{ $remediationKind }}
       {{- end }}
       name: {{ $remediationName }}
-    {{- with $poolSpec.healthCheck.remediation.triggerIf.unhealthyLessThanOrEqualTo }}
+    {{- with $healthCheck.remediation.triggerIf.unhealthyLessThanOrEqualTo }}
     triggerIf:
       unhealthyLessThanOrEqualTo: {{ . }}
     {{- end }}

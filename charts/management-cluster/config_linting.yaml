@@ -20,6 +20,25 @@ hCloud:
         # osVersion: "2404"
         # k8sVersion: "v1.35.6"
         buildTimestamp: "1744781328"
+      pools:
+        gpu:
+          replicas: 1
+          nodeLabels:
+            nodepool: gpu
+          nodeTaints:
+          - key: nvidia.com/gpu
+            value: present
+            effect: NoSchedule
+          bareMetal:
+            enabled: true
+            hosts:
+            - serverID: 1234567
+              rootDeviceHints:
+                raid:
+                  wwn:
+                  - "eui.0025388a21b0a1b2"
+                  - "eui.0025388a21b0a1b3"
+              description: "GPU server"
 
 install:
   # enabled: false

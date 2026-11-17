@@ -62,6 +62,7 @@ spec:
     {{- end }}
     name: {{ include "cluster-name" . }}
 {{- if eq .Values.capi.providers.infrastructure.name "hetzner" }}
+{{- $bareMetal := eq (include "cluster.hasBareMetalPools" .) "true" }}
 ---
 {{- /*
 `k explain HetznerCluster` for more information
@@ -77,6 +78,9 @@ metadata:
     {{- include "cluster.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "-10"
+    {{- if and $bareMetal .Values.hCloud.robot.useHrobotProviderID }}
+    capi.syself.com/use-hrobot-provider-id-for-baremetal: "true"
+    {{- end }}
 spec:
   controlPlaneEndpoint:
     {{- /*
@@ -133,11 +137,20 @@ spec:
       hcloudToken: {{ .Values.hCloud.token.secretKey }}
       hetznerRobotPassword: robot-password
       hetznerRobotUser: robot-user
-  {{- if .Values.hCloud.sshKeys }}
+  {{- if or .Values.hCloud.sshKeys $bareMetal }}
   sshKeys:
+    {{- with .Values.hCloud.sshKeys }}
     hcloud:
-    {{- range .Values.hCloud.sshKeys }}
+    {{- range . }}
     - name: {{ . }}
+    {{- end }}
+    {{- end }}
+    {{- if $bareMetal }}
+    {{- /*
+    SSH key for the rescue system of dedicated servers. The key's name must match a key in Robot.
+    https://syself.com/docs/caph/topics/managing-ssh-keys
+    */}}
+    robotRescueSecretRef: {{- toYaml (.Values.hCloud.robot.rescueSshSecretRef | required "ERROR: hCloud.robot.rescueSshSecretRef is required for bare-metal worker pools.") | nindent 6 }}
     {{- end }}
   {{- end }}
 {{- end }}
