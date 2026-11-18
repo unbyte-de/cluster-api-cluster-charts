@@ -299,7 +299,7 @@ exports:
                 # Must be >= 2.0.0 (the generated config.toml uses config version 3).
                 containerdVersion: "2.3.7"
                 runcVersion: "1.2.8"
-                pauseImage: registry.k8s.io/pause:3.10
+                pauseImage: registry.k8s.io/pause:3.10@sha256:ee6521f290b2168b6e0935a181d4cff9be1ac3f505666ef0e3c98fae8199917a
                 # Same as config/scripts/additional-tools.sh in cluster-api-machine-images (amd64 binary).
                 yq:
                   version: v4.49.2
