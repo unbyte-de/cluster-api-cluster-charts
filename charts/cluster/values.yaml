@@ -52,9 +52,13 @@ exports:
           remediation:
             # This is used only if remediation is enabled.
             triggerIf:
-              # The default value for unhealthyLessThanOrEqualTo is 100%.
-              # This means the short circuiting mechanism is disabled by default and Machines will be remediated no matter the state of the cluster.
-              unhealthyLessThanOrEqualTo: 100%
+              # Remediate a control-plane Machine only while at most 1 is unhealthy (short circuit).
+              # If more are unhealthy at the same time, the cause is almost never the machines
+              # themselves (overload, etcd, network), and rebooting/replacing them only takes etcd
+              # quorum away and keeps the control plane down. With 100% (the CAPI default) a
+              # memory problem on azl-stage became a reboot/replace storm of all 3 control-plane
+              # machines (2026-11-23). Recovery of a multi-node failure is then a manual decision.
+              unhealthyLessThanOrEqualTo: 1
       # Multi-pool worker config.
       # Each entry under `pools` becomes its own MachineDeployment + HCloudMachineTemplate + KubeadmConfigTemplate (+ MachineHealthCheck).
       # Bare-metal pools render HetznerBareMetalHosts + a HetznerBareMetalMachineTemplate instead, see `hCloud.machines.workers.defaults.bareMetal`.
